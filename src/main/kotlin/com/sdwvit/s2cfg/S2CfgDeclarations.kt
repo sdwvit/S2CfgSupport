@@ -87,8 +87,9 @@ object S2CfgDeclarations {
    * navigate, and the inspection that would flag it is off by default.
    */
   fun isReferenceKey(key: String): Boolean {
-    val singular = key.removeSuffix("s")
-    return singular.endsWith("SID") || singular.endsWith("ID") || singular.endsWith("Id")
+    val singular = key.removeSuffix("s").removeSuffix("S")
+    return singular.endsWith("SID") || singular.endsWith("Sid") ||
+      singular.endsWith("ID") || singular.endsWith("Id")
   }
 
   /**

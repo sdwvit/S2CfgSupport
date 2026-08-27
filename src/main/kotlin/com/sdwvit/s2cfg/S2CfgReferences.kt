@@ -79,16 +79,48 @@ object S2CfgReferenceFactory {
     val entry = value.parent as? S2CfgEntry ?: return PsiReference.EMPTY_ARRAY
     val key = S2CfgDeclarations.effectiveKey(entry) ?: return PsiReference.EMPTY_ARRAY
     if (!S2CfgDeclarations.isReferenceKey(key)) return PsiReference.EMPTY_ARRAY
-    val text = value.text.trim()
-    if (text.isEmpty() || text.contains(' ')) return PsiReference.EMPTY_ARRAY
     // the record's own `SID = X` is the declaration, not a reference to itself
     val owner = entry.parent as? S2CfgStruct
     if (key == "SID" && owner != null && S2CfgDeclarations.isDeclaration(owner)) {
       return PsiReference.EMPTY_ARRAY
     }
-    val offset = value.text.indexOf(text)
-    return arrayOf(S2CfgSidReference(value, TextRange(offset, offset + text.length), text))
+    val text = value.text
+    return nameRanges(text)
+      .map { range -> S2CfgSidReference(value, range, range.substring(text)) }
+      .toTypedArray()
   }
+
+  /**
+   * The name-shaped runs inside a value.
+   *
+   * Most reference values hold a single name, but list-valued keys separate several with commas or
+   * spaces (`RequiredUpgradeIDs = Up_01, Up_02`), and each of them has to be clickable on its own.
+   * Anything that cannot be a record name — a number, a bracketed index, an `EEnum::Literal` — is
+   * dropped so those values keep resolving to nothing rather than to a stray record.
+   */
+  private fun nameRanges(text: String): List<TextRange> {
+    val ranges = ArrayList<TextRange>()
+    var i = 0
+    while (i < text.length) {
+      if (text[i].isNameChar()) {
+        val start = i
+        while (i < text.length && text[i].isNameChar()) i++
+        val token = text.substring(start, i)
+        // `EItemType::Armor` and `1.5` are not names, and neither half of them is
+        val qualified = text.isQualifierAt(start - 1) || text.isQualifierAt(i)
+        if (!qualified && token.canBeRecordName()) ranges += TextRange(start, i)
+      } else {
+        i++
+      }
+    }
+    return ranges
+  }
+
+  private fun Char.isNameChar() = isLetterOrDigit() || this == '_'
+
+  private fun String.isQualifierAt(i: Int) = i in indices && (this[i] == ':' || this[i] == '.')
+
+  private fun String.canBeRecordName() = first().let { it.isLetter() || it == '_' }
 
   /** `{refurl=../Base/Armor.cfg}` and `{refkey=Battle_Varta_Armor}` */
   fun forRef(ref: S2CfgRef): Array<PsiReference> {

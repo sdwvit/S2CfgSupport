@@ -52,9 +52,11 @@ class S2CfgUnresolvedSidInspection : LocalInspectionTool() {
   override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean) = object : PsiElementVisitor() {
     override fun visitElement(element: PsiElement) {
       val value = element as? S2CfgValue ?: return
-      val reference = value.references.firstOrNull() as? S2CfgSidReference ?: return
-      if (reference.multiResolve(false).isEmpty()) {
-        holder.registerProblem(value, reference.rangeInElement, "Cannot resolve record '${value.text.trim()}'")
+      // a list value carries one reference per name, and each of them is reported separately
+      for (reference in value.references) {
+        if (reference !is S2CfgSidReference || reference.multiResolve(false).isNotEmpty()) continue
+        val name = reference.rangeInElement.substring(value.text)
+        holder.registerProblem(value, reference.rangeInElement, "Cannot resolve record '$name'")
       }
     }
   }

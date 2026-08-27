@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.2.0"
+version = "0.2.1"
 
 repositories {
   mavenCentral()
@@ -53,6 +53,17 @@ intellijPlatform {
     }
 
     changeNotes = """
+      <h4>0.2.1</h4>
+      <ul>
+        <li>Every name in a list-valued reference key is clickable, not just the first: a value like
+        <code>RequiredUpgradeIDs = Up_01, Up_02</code> now carries one reference per name, and the
+        unresolved-record inspection reports each of them separately.</li>
+        <li><code>Sid</code>-cased and <code>SIDS</code>-cased key spellings are recognised
+        alongside <code>SID</code>, <code>Id</code> and <code>IDs</code>.</li>
+        <li>Values that cannot be record names — numbers and <code>EItemType::Armor</code>-style
+        enum literals — no longer produce a reference under a <code>*SID</code> key.</li>
+      </ul>
+
       <h4>0.2.0</h4>
       <p><b>Fixes IDE freezes.</b> A <code>;</code> comment outside <code>{...}</code> — as in
       <code>PhysicsInteractionPrototypes.cfg</code> — used to hang the IDE outright, and every

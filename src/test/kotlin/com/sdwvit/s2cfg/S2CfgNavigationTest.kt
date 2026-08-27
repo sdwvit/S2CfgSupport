@@ -175,4 +175,65 @@ class S2CfgNavigationTest : BasePlatformTestCase() {
       .firstOrNull { it.text.trim() == text }
       ?.reference
       ?.resolve()
+
+  fun testUpgradePrototypeSidsArrayResolves() {
+    myFixture.addFileToProject(
+      "Upgrades/Zorya.cfg",
+      """
+      Zorya_Neutral_Armor_MaxDurability_Left_1_1 : struct.begin
+         SID = Zorya_Neutral_Armor_MaxDurability_Left_1_1
+      struct.end
+      """.trimIndent(),
+    )
+    val file = myFixture.configureByText(
+      "Armor.cfg",
+      """
+      Zorya_Neutral_Armor : struct.begin
+         SID = Zorya_Neutral_Armor
+         UpgradePrototypeSIDs : struct.begin
+            [0] = Zorya_Neutral_Armor_MaxDurability_Left_1_1
+         struct.end
+      struct.end
+      """.trimIndent(),
+    )
+    val target = resolveValueNamed(file, "Zorya_Neutral_Armor_MaxDurability_Left_1_1")
+    assertNotNull("[0] = ... should resolve", target)
+  }
+
+  /** A list-valued reference key makes every name in it clickable, not just the first. */
+  fun testListValueResolvesEachName() {
+    myFixture.addFileToProject(
+      "Upgrades/Up.cfg",
+      """
+      Up_01 : struct.begin
+         SID = Up_01
+      struct.end
+      Up_02 : struct.begin
+         SID = Up_02
+      struct.end
+      """.trimIndent(),
+    )
+    val file = myFixture.configureByText(
+      "Armor.cfg",
+      "Mine : struct.begin\n   SID = Mine\n   RequiredUpgradeIDs = Up_01, Up_02\nstruct.end",
+    )
+    val value = PsiTreeUtil.findChildrenOfType(file, S2CfgValue::class.java)
+      .first { it.text.contains("Up_01") }
+    val resolved = value.references.mapNotNull { (it as com.intellij.psi.PsiPolyVariantReference).resolve() }
+    assertEquals(2, value.references.size)
+    assertEquals(listOf("Up_01", "Up_02"), resolved.map { (it as S2CfgStruct).name0 })
+  }
+
+  /** `EItemType::Armor` and numbers are not record names, so they contribute no reference. */
+  fun testEnumAndNumericValuesHaveNoReference() {
+    val file = myFixture.configureByText(
+      "Armor.cfg",
+      "Mine : struct.begin\n   SID = Mine\n   UpgradeSID = EItemType::Armor\n   OtherID = 12\nstruct.end",
+    )
+    for (text in listOf("EItemType::Armor", "12")) {
+      val value = PsiTreeUtil.findChildrenOfType(file, S2CfgValue::class.java)
+        .first { it.text.trim() == text }
+      assertEmpty(text, value.references.toList())
+    }
+  }
 }
