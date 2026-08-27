@@ -2,6 +2,13 @@
 
 An IntelliJ plugin that understands the `.cfg` files STALKER 2 uses for game data.
 
+**[Get it on the JetBrains Marketplace](https://plugins.jetbrains.com/plugin/33872-stalker-2-cfg-support?noRedirect=true)**
+&nbsp;
+[![Version](https://img.shields.io/jetbrains/plugin/v/33872.svg)](https://plugins.jetbrains.com/plugin/33872-stalker-2-cfg-support?noRedirect=true)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/33872.svg)](https://plugins.jetbrains.com/plugin/33872-stalker-2-cfg-support?noRedirect=true)
+
+Install it from the IDE with Settings | Plugins | Marketplace, and search for "STALKER 2 Cfg".
+
 ## What it does
 
 **Reading**
@@ -54,11 +61,19 @@ another record. Only the former is indexed.
 
 ```bash
 JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew buildPlugin   # -> build/distributions/S2CfgSupport-0.1.0.zip
-JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew test          # 22 tests, incl. a parse of the whole S2Mods corpus
+JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew test          # 31 tests, incl. a parse of the whole S2Mods corpus
 JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew runIde        # sandbox IDE
 ```
 
 Gradle fetches its own JDK 21 toolchain (via the foojay resolver), because the JVMs installed
 system-wide here are JREs with no `javac`.
 
-Install the zip with Settings | Plugins | ⚙ | Install Plugin from Disk.
+Install a locally built zip with Settings | Plugins | ⚙ | Install Plugin from Disk — or take the
+released build from the [Marketplace listing](https://plugins.jetbrains.com/plugin/33872-stalker-2-cfg-support?noRedirect=true).
+
+Publishing an update, once a Marketplace [permanent token](https://plugins.jetbrains.com/author/me/tokens)
+is in hand:
+
+```bash
+PUBLISH_TOKEN=... ./gradlew publishPlugin
+```
