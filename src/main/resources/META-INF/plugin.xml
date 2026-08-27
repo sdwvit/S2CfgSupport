@@ -6,7 +6,9 @@
   <description><![CDATA[
     Language support for STALKER 2 game data <code>.cfg</code> files: syntax highlighting,
     struct folding, structure view with <code>refkey</code> inheritance hints, brace matching
-    and commenting.
+    and commenting. Ctrl-click navigation between records: <code>SID</code> references,
+    <code>refkey</code> inheritance and <code>refurl</code> file paths all resolve, with find
+    usages and rename.
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
@@ -23,5 +25,15 @@
                                   implementationClass="com.sdwvit.s2cfg.S2CfgStructureViewFactory"/>
     <lang.braceMatcher language="S2Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgBraceMatcher"/>
     <lang.commenter language="S2Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgCommenter"/>
+
+    <!-- stage 2: SID index and navigation -->
+    <fileBasedIndex implementation="com.sdwvit.s2cfg.S2CfgSidIndex"/>
+    <gotoSymbolContributor implementation="com.sdwvit.s2cfg.S2CfgGotoSymbolContributor"/>
+    <lang.findUsagesProvider language="S2Cfg"
+                             implementationClass="com.sdwvit.s2cfg.S2CfgFindUsagesProvider"/>
+    <lang.elementManipulator forClass="com.sdwvit.s2cfg.S2CfgValue"
+                             implementationClass="com.sdwvit.s2cfg.S2CfgValueManipulator"/>
+    <lang.elementManipulator forClass="com.sdwvit.s2cfg.S2CfgRef"
+                             implementationClass="com.sdwvit.s2cfg.S2CfgRefManipulator"/>
   </extensions>
 </idea-plugin>

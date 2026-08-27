@@ -3,8 +3,11 @@ package com.sdwvit.s2cfg
 import com.intellij.extapi.psi.ASTWrapperPsiElement
 import com.intellij.extapi.psi.PsiFileBase
 import com.intellij.lang.ASTNode
+import com.intellij.navigation.ItemPresentation
 import com.intellij.psi.FileViewProvider
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiNameIdentifierOwner
+import com.intellij.psi.PsiReference
 import com.intellij.psi.util.PsiTreeUtil
 
 class S2CfgFile(viewProvider: FileViewProvider) : PsiFileBase(viewProvider, S2CfgLanguage) {
@@ -19,9 +22,15 @@ class S2CfgKey(node: ASTNode) : ASTWrapperPsiElement(node) {
   val text0: String get() = text.trim()
 }
 
-class S2CfgValue(node: ASTNode) : ASTWrapperPsiElement(node)
+class S2CfgValue(node: ASTNode) : ASTWrapperPsiElement(node) {
+  override fun getReferences(): Array<PsiReference> = S2CfgReferenceFactory.forValue(this)
+  override fun getReference(): PsiReference? = references.firstOrNull()
+}
 
 class S2CfgRef(node: ASTNode) : ASTWrapperPsiElement(node) {
+  override fun getReferences(): Array<PsiReference> = S2CfgReferenceFactory.forRef(this)
+  override fun getReference(): PsiReference? = references.firstOrNull()
+
   val keyword: String? get() = node.findChildByType(S2CfgTypes.REF_KEYWORD)?.text
   val value: String? get() = node.findChildByType(S2CfgTypes.TEXT)?.text
 }
@@ -43,7 +52,7 @@ class S2CfgEntry(node: ASTNode) : ASTWrapperPsiElement(node) {
   val valueText: String? get() = valueElement?.text?.trim()?.takeIf { it.isNotEmpty() }
 }
 
-class S2CfgStruct(node: ASTNode) : ASTWrapperPsiElement(node) {
+class S2CfgStruct(node: ASTNode) : ASTWrapperPsiElement(node), PsiNameIdentifierOwner {
   val head: S2CfgStructHead? get() = PsiTreeUtil.getChildOfType(this, S2CfgStructHead::class.java)
 
   /** The declared name (`Foo` in `Foo : struct.begin`), or the array index (`[0]`), or null. */
@@ -65,6 +74,41 @@ class S2CfgStruct(node: ASTNode) : ASTWrapperPsiElement(node) {
   /** What the structure view and folding placeholder show. */
   val presentableName: String
     get() = name0?.takeIf { it.isNotEmpty() } ?: sid ?: "struct"
+
+  // --- declaration support (rename / find usages) ---
+
+  /** Only top-level structs declare a name; see [S2CfgDeclarations]. */
+  override fun getName(): String? = if (parent is S2CfgFile) name0 ?: sid else null
+
+  /**
+   * The struct name and its `SID` are two spellings of the same identity in this data, so renaming
+   * one rewrites the other when they agree.
+   */
+  override fun setName(name: String): PsiElement {
+    val oldName = getName()
+    head?.key?.let { key ->
+      S2CfgElementFactory.createStruct(project, name).head?.key?.let { key.replace(it) }
+    }
+    val sidEntry = entries.firstOrNull { it.keyName == "SID" }
+    if (sidEntry != null && sidEntry.valueText == oldName) {
+      sidEntry.valueElement?.let { value ->
+        S2CfgElementFactory.createEntry(project, "SID", name).valueElement?.let { value.replace(it) }
+      }
+    }
+    return this
+  }
+
+  override fun getNameIdentifier(): PsiElement? = head?.key ?: entries.firstOrNull { it.keyName == "SID" }?.valueElement
+
+  override fun getTextOffset(): Int = nameIdentifier?.textOffset ?: super.getTextOffset()
+
+  override fun getPresentation(): ItemPresentation? = S2CfgStructPresentation(this)
+}
+
+class S2CfgStructPresentation(private val struct: S2CfgStruct) : ItemPresentation {
+  override fun getPresentableText() = struct.presentableName
+  override fun getLocationString() = struct.containingFile?.name
+  override fun getIcon(unused: Boolean) = S2CfgIcons.FILE
 }
 
 object S2CfgPsiFactory {

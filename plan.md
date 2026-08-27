@@ -28,10 +28,19 @@ comment     := line starting with '#' or '//'
 - [ ] Interactive smoke test in `runIde` (not run yet — needs a desktop session)
 
 ## Stage 2 — SID index + navigation
-- [ ] `FileBasedIndex` of `SID = X` declarations and struct names
-- [ ] Reference contributor: SID-valued entries resolve to declaring struct (cross-file)
-- [ ] `refurl` resolves to the target cfg file; `refkey` to the struct inside it
-- [ ] Find usages + rename for SIDs
+- [x] `FileBasedIndex` of `SID = X` declarations and struct names (`S2CfgSidIndex`, text-based depth scan)
+- [x] Declaration vs reference rule: a `SID` is a declaration only at the top level of a file
+- [x] SID-valued entries (`SID`, `*SID`) resolve to the declaring struct, cross-file
+- [x] `refurl` resolves to the target cfg file; `refkey` to the struct inside it (falling back to
+      same file, then project-wide)
+- [x] `refkey=[0]` correctly yields no reference
+- [x] Find usages + rename for SIDs (rename rewrites struct name, its `SID`, and all references)
+- [x] Go to Symbol (Ctrl+Alt+Shift+N) by SID
+- [ ] Interactive smoke test in `runIde`
+
+Note: references are attached by the PSI elements themselves. A `psi.referenceContributor` does
+nothing here — contributed references are only consulted for `ContributedReferenceHost` elements,
+which custom-language PSI is not.
 
 ## Stage 3 — completion + inspections
 - [ ] Enum member completion (index all `EFoo::Bar` seen in game data)
