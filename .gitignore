@@ -1,6 +1,34 @@
+# build output
 build/
+out/
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# gradle
 .gradle/
+.kotlin/
+.intellijPlatform/
+local.properties
+gradle-app.setting
+
+# IDE
 .idea/
 *.iml
-out/
-.intellijPlatform/
+*.ipr
+*.iws
+
+# logs, crash dumps, profiler output
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# credentials — the Marketplace token is read from the environment, never a file
+.env
+*.pem
+*.p12
+secrets.properties
+
+# OS
+.DS_Store
+Thumbs.db
