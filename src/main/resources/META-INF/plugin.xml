@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>com.sdwvit.s2cfg</id>
   <name>STALKER 2 Cfg Support</name>
-  <vendor email="victor.musienko@ag-grid.com">sdwvit</vendor>
+  <vendor email="vit.musienko@gmail.com">sdwvit</vendor>
 
   <description><![CDATA[
     Language support for STALKER 2 game data <code>.cfg</code> files: syntax highlighting,
