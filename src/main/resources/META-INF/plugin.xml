@@ -1,0 +1,27 @@
+<idea-plugin>
+  <id>com.sdwvit.s2cfg</id>
+  <name>STALKER 2 Cfg Support</name>
+  <vendor email="victor.musienko@ag-grid.com">sdwvit</vendor>
+
+  <description><![CDATA[
+    Language support for STALKER 2 game data <code>.cfg</code> files: syntax highlighting,
+    struct folding, structure view with <code>refkey</code> inheritance hints, brace matching
+    and commenting.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <fileType name="STALKER 2 Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgFileType"
+              fieldName="INSTANCE" language="S2Cfg" extensions="cfg"/>
+    <lang.parserDefinition language="S2Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgParserDefinition"/>
+    <lang.syntaxHighlighterFactory language="S2Cfg"
+                                   implementationClass="com.sdwvit.s2cfg.S2CfgSyntaxHighlighterFactory"/>
+    <colorSettingsPage implementation="com.sdwvit.s2cfg.S2CfgColorSettingsPage"/>
+    <lang.foldingBuilder language="S2Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgFoldingBuilder"/>
+    <lang.psiStructureViewFactory language="S2Cfg"
+                                  implementationClass="com.sdwvit.s2cfg.S2CfgStructureViewFactory"/>
+    <lang.braceMatcher language="S2Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgBraceMatcher"/>
+    <lang.commenter language="S2Cfg" implementationClass="com.sdwvit.s2cfg.S2CfgCommenter"/>
+  </extensions>
+</idea-plugin>
