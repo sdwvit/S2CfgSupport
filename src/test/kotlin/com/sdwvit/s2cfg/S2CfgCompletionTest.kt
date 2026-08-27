@@ -40,7 +40,11 @@ class S2CfgCompletionTest : BasePlatformTestCase() {
       "Same.cfg",
       "Base_Armor : struct.begin\n   A = 1\nstruct.end\nD : struct.begin {refkey=Base<caret>}\nstruct.end",
     )
-    assertContainsElements(myFixture.completeBasic().map { it.lookupString }, "Base_Armor")
+    // the only match, so the platform inserts it instead of showing a popup (completeBasic -> null)
+    assertNull(myFixture.completeBasic())
+    myFixture.checkResult(
+      "Base_Armor : struct.begin\n   A = 1\nstruct.end\nD : struct.begin {refkey=Base_Armor}\nstruct.end"
+    )
   }
 
   fun testMissingRefurlIsReported() {

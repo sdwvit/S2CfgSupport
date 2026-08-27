@@ -3,6 +3,7 @@ package com.sdwvit.s2cfg
 import com.intellij.lang.ASTNode
 import com.intellij.lang.PsiBuilder
 import com.intellij.lang.PsiParser
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.psi.tree.IElementType
 
 /**
@@ -16,6 +17,7 @@ class S2CfgParser : PsiParser {
   override fun parse(root: IElementType, builder: PsiBuilder): ASTNode {
     val file = builder.mark()
     while (!builder.eof()) {
+      ProgressManager.checkCanceled()
       if (!parseTopLevel(builder)) builder.advanceLexer()
     }
     file.done(root)
@@ -35,7 +37,7 @@ class S2CfgParser : PsiParser {
     if (b.tokenType == S2CfgTypes.STRUCT_BEGIN) return true
     if (!isKeyStart(b.tokenType)) return false
     var i = 0
-    while (true) {
+    while (i < MAX_KEY_LOOKAHEAD) {
       val t = b.lookAhead(i) ?: return false
       when (t) {
         S2CfgTypes.COLON -> return true
@@ -45,12 +47,13 @@ class S2CfgParser : PsiParser {
         else -> return false
       }
     }
+    return false
   }
 
   private fun startsEntry(b: PsiBuilder): Boolean {
     if (!isKeyStart(b.tokenType)) return false
     var i = 0
-    while (true) {
+    while (i < MAX_KEY_LOOKAHEAD) {
       when (b.lookAhead(i) ?: return false) {
         S2CfgTypes.EQ -> return true
         S2CfgTypes.IDENT, S2CfgTypes.LBRACKET, S2CfgTypes.RBRACKET,
@@ -58,6 +61,7 @@ class S2CfgParser : PsiParser {
         else -> return false
       }
     }
+    return false
   }
 
   private fun isKeyStart(t: IElementType?) =
@@ -82,6 +86,7 @@ class S2CfgParser : PsiParser {
     head.done(S2CfgTypes.STRUCT_HEAD)
 
     while (!b.eof() && b.tokenType != S2CfgTypes.STRUCT_END) {
+      ProgressManager.checkCanceled()
       when {
         b.tokenType == S2CfgTypes.COMMENT -> b.advanceLexer()
         startsStruct(b) -> parseStruct(b)
@@ -144,5 +149,14 @@ class S2CfgParser : PsiParser {
     }
     if (b.tokenType == S2CfgTypes.RBRACE) b.advanceLexer() else b.error("'}' expected")
     refs.done(S2CfgTypes.REFS)
+  }
+
+  private companion object {
+    /**
+     * A key is one token (`Name`) or three (`[`, `0`, `]`). Anything longer is malformed input, and
+     * scanning it unbounded turns a single junk line into quadratic work: every token in the line
+     * re-scans the rest of it. Real `.cfg`-named files that are not STALKER cfgs hit exactly that.
+     */
+    const val MAX_KEY_LOOKAHEAD = 8
   }
 }

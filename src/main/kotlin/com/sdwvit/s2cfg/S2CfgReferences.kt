@@ -2,6 +2,7 @@ package com.sdwvit.s2cfg
 
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.*
+import com.intellij.psi.impl.source.resolve.ResolveCache
 import com.intellij.psi.search.GlobalSearchScope
 
 /** `SID = ANCQ27_Start` (nested) / `UpgradeSID = Up_01` -> the struct declaring that name. */
@@ -9,11 +10,19 @@ class S2CfgSidReference(element: PsiElement, range: TextRange, private val name:
   PsiReferenceBase.Poly<PsiElement>(element, range, /* soft = */ true) {
 
   override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
-    S2CfgDeclarations.findByName(element.project, name, GlobalSearchScope.allScope(element.project))
+    ResolveCache.getInstance(element.project).resolveWithCaching(this, Resolver, false, incompleteCode)
+
+  private fun resolveUncached(): Array<ResolveResult> =
+    S2CfgDeclarations.findByName(element.project, name, GlobalSearchScope.projectScope(element.project))
       .map { PsiElementResolveResult(it) }
       .toTypedArray()
 
-  override fun getVariants(): Array<Any> = S2CfgDeclarations.allNames(element.project).toTypedArray()
+  /** Completion is handled by [S2CfgCompletionContributor], which can filter by prefix and cap. */
+  override fun getVariants(): Array<Any> = emptyArray()
+
+  private object Resolver : ResolveCache.PolyVariantResolver<S2CfgSidReference> {
+    override fun resolve(ref: S2CfgSidReference, incompleteCode: Boolean) = ref.resolveUncached()
+  }
 }
 
 /** `{refurl=../DialogPoolPrototypes/Brodyaga.cfg}` -> that file. */
@@ -31,7 +40,10 @@ class S2CfgRefurlReference(element: PsiElement, range: TextRange, private val pa
 class S2CfgRefkeyReference(element: PsiElement, range: TextRange, private val name: String) :
   PsiReferenceBase.Poly<PsiElement>(element, range, /* soft = */ true) {
 
-  override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> {
+  override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
+    ResolveCache.getInstance(element.project).resolveWithCaching(this, Resolver, false, incompleteCode)
+
+  private fun resolveUncached(): Array<ResolveResult> {
     val refs = element.parent as? S2CfgRefs
     val inRefurlFile = refs?.value("refurl")?.let { url ->
       val dir = element.containingFile?.originalFile?.virtualFile?.parent
@@ -43,11 +55,16 @@ class S2CfgRefkeyReference(element: PsiElement, range: TextRange, private val na
       ?: (element.containingFile as? S2CfgFile)?.structs
         ?.filter { name in S2CfgDeclarations.namesDeclaredBy(it) }
         ?.takeIf { it.isNotEmpty() }
-      ?: S2CfgDeclarations.findByName(element.project, name, GlobalSearchScope.allScope(element.project))
+      ?: S2CfgDeclarations.findByName(element.project, name, GlobalSearchScope.projectScope(element.project))
     return targets.map { PsiElementResolveResult(it) }.toTypedArray()
   }
 
-  override fun getVariants(): Array<Any> = S2CfgDeclarations.allNames(element.project).toTypedArray()
+  /** Completion is handled by [S2CfgCompletionContributor], which can filter by prefix and cap. */
+  override fun getVariants(): Array<Any> = emptyArray()
+
+  private object Resolver : ResolveCache.PolyVariantResolver<S2CfgRefkeyReference> {
+    override fun resolve(ref: S2CfgRefkeyReference, incompleteCode: Boolean) = ref.resolveUncached()
+  }
 }
 
 /**

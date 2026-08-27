@@ -12,7 +12,7 @@ class S2CfgGotoSymbolContributor : ChooseByNameContributorEx {
 
   override fun processNames(processor: Processor<in String>, scope: GlobalSearchScope, filter: IdFilter?) {
     val project = scope.project ?: return
-    S2CfgDeclarations.allNames(project).forEach { if (!processor.process(it)) return }
+    S2CfgDeclarations.processNames(project, processor)
   }
 
   override fun processElementsWithName(

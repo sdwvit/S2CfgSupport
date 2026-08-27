@@ -7,6 +7,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.util.Processor
 
 /**
  * Navigate | Related Symbol from `Foo_patch_MyMod.cfg` to the `Foo.cfg` it patches, and back.
@@ -39,12 +40,23 @@ class S2CfgRelatedProvider : GotoRelatedProvider() {
       .filter { it != from }
       .sortedByDescending { sharedGameDataPath(it, from) }
 
-  private fun findPatchesOf(project: com.intellij.openapi.project.Project, base: VirtualFile) =
-    FilenameIndex.getAllFilenames(project)
-      .filter { it.startsWith(base.nameWithoutExtension + "_patch_") && it.endsWith(".cfg") }
-      .flatMap { FilenameIndex.getVirtualFilesByName(it, GlobalSearchScope.allScope(project)) }
+  /**
+   * Names are streamed rather than collected: `getAllFilenames` materialises every file name in the
+   * project, which on a GameData checkout is a multi-second stall on the EDT.
+   */
+  private fun findPatchesOf(project: com.intellij.openapi.project.Project, base: VirtualFile): List<VirtualFile> {
+    val prefix = base.nameWithoutExtension + "_patch_"
+    val names = ArrayList<String>()
+    FilenameIndex.processAllFileNames(Processor { name ->
+      if (name.startsWith(prefix) && name.endsWith(".cfg")) names += name
+      names.size < MAX_PATCHES
+    }, GlobalSearchScope.projectScope(project), null)
+
+    return names
+      .flatMap { FilenameIndex.getVirtualFilesByName(it, GlobalSearchScope.projectScope(project)) }
       .filter { it != base }
       .sortedByDescending { sharedGameDataPath(it, base) }
+  }
 
   /** How much of the `GameData/...` tail two files share — the tie-breaker between same-named cfgs. */
   private fun sharedGameDataPath(a: VirtualFile, b: VirtualFile): Int {
@@ -55,5 +67,6 @@ class S2CfgRelatedProvider : GotoRelatedProvider() {
 
   private companion object {
     val PATCH_NAME = Regex("^(.+)_patch_[^_]+$")
+    const val MAX_PATCHES = 200
   }
 }

@@ -2,6 +2,8 @@ package com.sdwvit.s2cfg
 
 import com.intellij.codeInsight.completion.*
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.util.Processor
 import com.intellij.patterns.PlatformPatterns.psiElement
 import com.intellij.psi.PsiElement
 import com.intellij.util.ProcessingContext
@@ -45,6 +47,13 @@ private object RefkeyCompletion : CompletionProvider<CompletionParameters>() {
   }
 }
 
+/**
+ * GameData declares hundreds of thousands of records, so project-wide names are added only when
+ * they match the typed prefix, and only up to [MAX_PROJECT_NAMES] of them. Adding all of them
+ * unconditionally builds a lookup element per record on the completion thread and hangs the popup.
+ */
+private const val MAX_PROJECT_NAMES = 1000
+
 private fun addDeclarationNames(context: PsiElement, result: CompletionResultSet) {
   // structs in this file first: refkey without refurl looks here, and cross-file names are legion
   val local = (context.containingFile as? S2CfgFile)?.structs
@@ -54,9 +63,24 @@ private fun addDeclarationNames(context: PsiElement, result: CompletionResultSet
   local.forEach {
     result.addElement(LookupElementBuilder.create(it).withTypeText("this file").withBoldness(true))
   }
-  S2CfgDeclarations.allNames(context.project).asSequence()
-    .filter { it !in local }
-    .forEach { result.addElement(LookupElementBuilder.create(it).withTypeText("record")) }
+
+  val matcher = result.prefixMatcher
+  var added = 0
+  S2CfgLog.timed(what = { "completion for prefix '${matcher.prefix}'" }) {
+    S2CfgDeclarations.processNames(context.project, Processor { name ->
+      ProgressManager.checkCanceled()
+      if (name !in local && matcher.prefixMatches(name)) {
+        result.addElement(LookupElementBuilder.create(name).withTypeText("record"))
+        added++
+      }
+      added < MAX_PROJECT_NAMES
+    })
+  }
+  if (added >= MAX_PROJECT_NAMES) {
+    // typing more narrows the prefix, so ask for a rerun instead of pretending the list is complete
+    result.restartCompletionOnAnyPrefixChange()
+    S2CfgLog.LOG.debug("completion truncated at $MAX_PROJECT_NAMES for '${matcher.prefix}'")
+  }
 }
 
 /**
