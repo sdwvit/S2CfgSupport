@@ -60,7 +60,7 @@ another record. Only the former is indexed.
 ## Building
 
 ```bash
-JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew buildPlugin   # -> build/distributions/S2CfgSupport-0.1.0.zip
+JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew buildPlugin   # -> build/distributions/S2CfgSupport-0.2.0.zip
 JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew test          # 31 tests, incl. a parse of the whole S2Mods corpus
 JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew runIde        # sandbox IDE
 ```

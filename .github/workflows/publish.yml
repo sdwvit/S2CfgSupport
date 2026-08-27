@@ -1,7 +1,12 @@
 name: Publish to JetBrains Marketplace
 
 # Tagging `v0.2.0` publishes, provided the tag matches the version in build.gradle.kts.
-# Use the manual trigger with "dry run" to exercise the whole pipeline without publishing.
+# Use the manual trigger with "dry run" to exercise everything except the upload.
+#
+# The Marketplace token is an environment secret on `marketplace`, not a repository secret, so it
+# is unreachable from any other workflow or job in this repo. That environment requires a review
+# from @sdwvit and accepts deployments only from `v*` tags, which means an upload cannot happen
+# without a human approving that specific run.
 on:
   push:
     tags:
@@ -18,6 +23,8 @@ on:
         type: boolean
         default: false
 
+# The publish job needs `deployments` to enter the gated environment; nothing needs write access
+# to repository contents.
 permissions:
   contents: read
 
@@ -26,20 +33,22 @@ concurrency:
   group: publish-marketplace
   cancel-in-progress: false
 
+# Third-party actions are pinned to commit SHAs: a moved tag on any of them would otherwise run
+# unreviewed code in a job that can reach the token.
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
 
       # The version lives in build.gradle.kts and the Marketplace rejects a re-upload of an
       # existing version, so a tag that disagrees with it is a mistake worth catching before
@@ -67,7 +76,7 @@ jobs:
         run: ./gradlew verifyPlugin
 
       # A test that passes locally can still fail here, so keep the reports reachable.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: test-reports
@@ -79,21 +88,44 @@ jobs:
       - name: Build
         run: ./gradlew buildPlugin
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: plugin-distribution
           path: build/distributions/*.zip
           if-no-files-found: error
 
+  publish:
+    needs: build
+    if: ${{ inputs.dry-run != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # the approval gate, and the only place the token exists
+    environment:
+      name: marketplace
+      url: https://plugins.jetbrains.com/plugin/33872-stalker-2-cfg-support
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+
       - name: Publish
-        if: ${{ inputs.dry-run != true }}
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
         run: |
           if [ -z "$PUBLISH_TOKEN" ]; then
-            echo "::error::PUBLISH_TOKEN is not set. Create a permanent token at"
-            echo "::error::https://plugins.jetbrains.com/author/me/tokens then run:"
-            echo "::error::gh secret set PUBLISH_TOKEN"
+            echo "::error::PUBLISH_TOKEN is not set on the marketplace environment. Create a"
+            echo "::error::permanent token at https://plugins.jetbrains.com/author/me/tokens then:"
+            echo "::error::gh secret set PUBLISH_TOKEN --env marketplace"
             exit 1
           fi
           ./gradlew publishPlugin -PpublishChannel=${{ inputs.channel || 'default' }}

@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.1.0"
+version = "0.2.0"
 
 repositories {
   mavenCentral()
@@ -53,6 +53,24 @@ intellijPlatform {
     }
 
     changeNotes = """
+      <h4>0.2.0</h4>
+      <p><b>Fixes IDE freezes.</b> A <code>;</code> comment outside <code>{...}</code> — as in
+      <code>PhysicsInteractionPrototypes.cfg</code> — used to hang the IDE outright, and every
+      keystroke re-tokenized the whole file, which froze the editor on the multi-megabyte cfgs in
+      GameData. Lexing is now streaming and <code>;</code> is a comment, like <code>#</code> and
+      <code>//</code>.</p>
+      <ul>
+        <li>Array elements navigate: <code>FittingWeaponsSIDs</code> / <code>[0] = GunPM_HG</code>
+        resolves, and the plural key spellings (<code>UpgradePrototypeSIDs</code>,
+        <code>RequiredUpgradeIDs</code>) are recognised — some six thousand corpus entries that
+        were inert text before.</li>
+        <li>Values such as <code>1.0</code> are highlighted as numbers rather than as text.</li>
+        <li>Completion and reference resolution are bounded and cached, so neither stalls on a
+        project holding hundreds of thousands of records.</li>
+        <li>Slow resolves and completions are logged to idea.log, since a freeze otherwise leaves
+        nothing to go on.</li>
+      </ul>
+
       <h4>0.1.0</h4>
       <p>First release: syntax highlighting, folding, structure view, brace matching and commenting
       for STALKER 2 <code>.cfg</code> game data, plus navigation across records — <code>SID</code>
