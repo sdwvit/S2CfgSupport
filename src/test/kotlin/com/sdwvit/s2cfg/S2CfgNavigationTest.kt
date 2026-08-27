@@ -165,7 +165,12 @@ class S2CfgNavigationTest : BasePlatformTestCase() {
     for (key in listOf("SID", "QuestSID", "UpgradePrototypeSIDs", "RequiredUpgradeIDs", "BlockingUpgradeIds")) {
       assertTrue(key, S2CfgDeclarations.isReferenceKey(key))
     }
-    for (key in listOf("Name", "MaxDurability", "ItemType")) {
+    // `Guid` keys point at records too, and so do the keys that do not say so in their name
+    for (key in listOf("PlaceholderActorGuid", "TargetQuestGuids", "BlockingBodyMeshes", "AvailableDialogs", "Faction")) {
+      assertTrue(key, S2CfgDeclarations.isReferenceKey(key))
+    }
+    // these pass a naive "value looks like a record name" test but are not references
+    for (key in listOf("Name", "MaxDurability", "ItemType", "DLC", "PresetName", "MaterialGroup", "VariableValue")) {
       assertFalse(key, S2CfgDeclarations.isReferenceKey(key))
     }
   }

@@ -79,18 +79,77 @@ object S2CfgDeclarations {
   }
 
   /**
-   * Keys whose values point at another record: `SID`, `QuestSID`, `UpgradeSID`, and the plural
-   * array forms (`UpgradePrototypeSIDs`, `RequiredUpgradeIDs`, `BlockingUpgradeIds`) — together
-   * some six thousand entries across the corpus.
+   * Keys whose values point at another record.
+   *
+   * Two rules, because the corpus uses two conventions. Most reference keys say so in their name
+   * (`SID`, `QuestSID`, `UpgradePrototypeSIDs`, `RequiredUpgradeIDs`, `PlaceholderActorGuid`), and
+   * the suffix test below covers those. The rest do not name themselves at all
+   * (`BlockingBodyMeshes`, `AvailableDialogs`, `Faction`), so they are listed in [NAMED_REFERENCE_KEYS].
    *
    * Being generous is safe: these references are soft, so a value naming no record simply does not
    * navigate, and the inspection that would flag it is off by default.
    */
   fun isReferenceKey(key: String): Boolean {
+    if (key in NAMED_REFERENCE_KEYS) return true
     val singular = key.removeSuffix("s").removeSuffix("S")
     return singular.endsWith("SID") || singular.endsWith("Sid") ||
-      singular.endsWith("ID") || singular.endsWith("Id")
+      singular.endsWith("ID") || singular.endsWith("Id") ||
+      singular.endsWith("GUID") || singular.endsWith("Guid")
   }
+
+  /**
+   * Reference keys whose name says nothing about it, together some fifty thousand entries.
+   *
+   * Derived from the shipped GameData rather than guessed: a key is here when at least 90% of its
+   * identifier-shaped values name a record declared somewhere in the corpus, and the S2CfgToJSON
+   * schema types it as a string (or array of strings) rather than as an enum, a number or a bool.
+   * Keys that pass the first test only by accident — `DLC = BaseGame`, `PresetName = Default`,
+   * `MaterialGroup = "Face"` — are deliberately absent.
+   */
+  private val NAMED_REFERENCE_KEYS = setOf(
+    "AllowFactions",
+    "AllowedFactions",
+    "AllowedUserRestriction",
+    "AnomaliesPresets",
+    "AvailableDialogs",
+    "AvailableObjPrototypes",
+    "BlockingBodyMeshes",
+    "BusyCommentDialogChain",
+    "ByeDialogChain",
+    "CompletedNodeLauncherNames",
+    "DefeatCommentDialogChain",
+    "DefeatTopicDialogChain",
+    "DialogMembers",
+    "Faction",
+    "GeneralWeaponSetup",
+    "HelloDialogChain",
+    "HideOnAttachPrototypeIDInstalled",
+    "InfotopicDialogs",
+    "InitialInhabitantFaction",
+    "Items",
+    "LairCoreVolumes",
+    "LairTerritoryVolumes",
+    "ListOfArtifacts",
+    "MainInfoTopicOwner",
+    "MoveToPath",
+    "NPCMarker",
+    "NPCWeaponAttributes",
+    "NodesToCleanUpResults",
+    "ObjPrototypeRestrictions",
+    "PlayerWeaponAttributes",
+    "PreinstalledUpgrades",
+    "ResumeCommentDialogChain",
+    "ShouldBeKilled",
+    "StayContextualAction",
+    "TargetContextualActionPlaceholder",
+    "TargetItemContainer",
+    "TargetNPC",
+    "TargetNode",
+    "TargetPlaceholder",
+    "Title",
+    "Trigger",
+    "Volume",
+  )
 
   /**
    * The key that decides what an entry's value *means*.

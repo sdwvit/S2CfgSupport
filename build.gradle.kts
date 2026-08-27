@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.2.1"
+version = "0.2.2"
 
 repositories {
   mavenCentral()
@@ -53,8 +53,18 @@ intellijPlatform {
     }
 
     changeNotes = """
-      <h4>0.2.1</h4>
+      <h4>0.2.2</h4>
       <ul>
+        <li>Keys that hold a record name without saying so — <code>BlockingBodyMeshes</code>,
+        <code>AvailableDialogs</code>, <code>DialogMembers</code>, <code>Faction</code>,
+        <code>TargetNode</code>, <code>PreinstalledUpgrades</code> and some forty more — now
+        navigate, complete and rename like <code>*SID</code> keys do. The list is derived from the
+        shipped GameData: a key qualifies when at least 90% of its values name a declared record
+        and the schema types it as a string, which keeps <code>DLC = BaseGame</code> and
+        <code>PresetName = Default</code> out. Roughly fifty thousand corpus entries that were
+        inert text before.</li>
+        <li><code>Guid</code>-suffixed keys (<code>PlaceholderActorGuid</code>,
+        <code>TriggerQuestGuid</code>) are recognised as references.</li>
         <li>Every name in a list-valued reference key is clickable, not just the first: a value like
         <code>RequiredUpgradeIDs = Up_01, Up_02</code> now carries one reference per name, and the
         unresolved-record inspection reports each of them separately.</li>
