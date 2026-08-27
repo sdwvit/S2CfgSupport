@@ -78,8 +78,34 @@ object S2CfgDeclarations {
     return FileBasedIndex.getInstance().processAllKeys(S2CfgSidIndex.NAME, processor, project)
   }
 
-  /** Keys whose values point at another record: `SID`, `QuestSID`, `UpgradeSID`, ... */
-  fun isReferenceKey(key: String) = key == "SID" || key.endsWith("SID")
+  /**
+   * Keys whose values point at another record: `SID`, `QuestSID`, `UpgradeSID`, and the plural
+   * array forms (`UpgradePrototypeSIDs`, `RequiredUpgradeIDs`, `BlockingUpgradeIds`) — together
+   * some six thousand entries across the corpus.
+   *
+   * Being generous is safe: these references are soft, so a value naming no record simply does not
+   * navigate, and the inspection that would flag it is off by default.
+   */
+  fun isReferenceKey(key: String): Boolean {
+    val singular = key.removeSuffix("s")
+    return singular.endsWith("SID") || singular.endsWith("ID") || singular.endsWith("Id")
+  }
+
+  /**
+   * The key that decides what an entry's value *means*.
+   *
+   * For `[0] = GunPM_HG` that is not `[0]` but the name of the array holding it
+   * (`FittingWeaponsSIDs`), so array elements navigate like the scalar form does.
+   */
+  fun effectiveKey(entry: S2CfgEntry): String? {
+    var key = entry.keyName ?: return null
+    var owner = entry.parent as? S2CfgStruct
+    while (key.startsWith("[")) {
+      key = owner?.name0 ?: return null
+      owner = owner.parent as? S2CfgStruct
+    }
+    return key
+  }
 
   private fun String.isNotBracketed() = !startsWith("[")
 }

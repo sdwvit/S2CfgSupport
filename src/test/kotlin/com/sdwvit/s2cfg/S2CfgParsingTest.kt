@@ -112,4 +112,26 @@ class S2CfgParsingTest : ParsingTestCase("", "cfg", S2CfgParserDefinition()) {
     }
     assertEquals("cfgs failed to parse:\n" + failures.joinToString("\n"), 0, failures.size)
   }
+
+  /** PhysicsInteractionPrototypes.cfg comments with `;` on one line and `//` on the next. */
+  fun testSemicolonStartsAComment() {
+    val file = createPsiFile(
+      "semicolon",
+      """
+      PhysicsInteraction : struct.begin
+         WaterImpulseReduction = 3.0
+         ;Max impulse to apply to the object when pushed by player
+         PlayerPushImpulse = 1000.0
+         // Default distance to cut all sounds is 10m
+      struct.end
+      """.trimIndent(),
+    )
+    assertEmpty(PsiTreeUtil.findChildrenOfType(file, PsiErrorElement::class.java).toList())
+    val struct = PsiTreeUtil.findChildOfType(file, S2CfgStruct::class.java)!!
+    // the comment must not become an entry of its own
+    assertEquals(
+      listOf("WaterImpulseReduction", "PlayerPushImpulse"),
+      struct.entries.map { it.keyName },
+    )
+  }
 }

@@ -74,10 +74,10 @@ class S2CfgRefkeyReference(element: PsiElement, range: TextRange, private val na
  */
 object S2CfgReferenceFactory {
 
-  /** `SID = ANCQ27_Start`, `UpgradeSID = Up_01`, ... */
+  /** `SID = ANCQ27_Start`, `UpgradeSID = Up_01`, `FittingWeaponsSIDs/[0] = GunPM_HG`, ... */
   fun forValue(value: S2CfgValue): Array<PsiReference> {
     val entry = value.parent as? S2CfgEntry ?: return PsiReference.EMPTY_ARRAY
-    val key = entry.keyName ?: return PsiReference.EMPTY_ARRAY
+    val key = S2CfgDeclarations.effectiveKey(entry) ?: return PsiReference.EMPTY_ARRAY
     if (!S2CfgDeclarations.isReferenceKey(key)) return PsiReference.EMPTY_ARRAY
     val text = value.text.trim()
     if (text.isEmpty() || text.contains(' ')) return PsiReference.EMPTY_ARRAY

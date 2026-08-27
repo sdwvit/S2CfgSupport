@@ -24,7 +24,8 @@ private object ValueCompletion : CompletionProvider<CompletionParameters>() {
   ) {
     val value = parameters.position.parent as? S2CfgValue ?: return
     val entry = value.parent as? S2CfgEntry ?: return
-    val key = entry.keyName ?: return
+    // `[0] = <caret>` takes its meaning from the enclosing array's name, not from `[0]`
+    val key = S2CfgDeclarations.effectiveKey(entry) ?: return
     val sink = result.withPrefixMatcher(prefixBefore(parameters, value))
 
     S2CfgEnumIndex.literalsFor(value.project, key).forEach {

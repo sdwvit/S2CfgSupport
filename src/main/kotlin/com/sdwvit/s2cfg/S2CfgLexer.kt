@@ -98,7 +98,10 @@ class S2CfgLexer : LexerBase() {
           while (j < bufferEnd && isSpace(buffer[j])) j++
           return emit(TokenType.WHITE_SPACE, j)
         }
-        c == '#' || (c == '/' && i + 1 < bufferEnd && buffer[i + 1] == '/') -> {
+        // `#`, `//` and `;` all start a line comment outside `{...}`; PhysicsInteractionPrototypes
+        // uses `;` and `//` on adjacent lines. Inside `{...}` a `;` separates modifiers instead.
+        c == '#' || c == ';' && ctx != REFS ||
+          (c == '/' && i + 1 < bufferEnd && buffer[i + 1] == '/') -> {
           var j = i
           while (j < bufferEnd && buffer[j] != '\n' && buffer[j] != '\r') j++
           return emit(S2CfgTypes.COMMENT, j)
@@ -116,8 +119,8 @@ class S2CfgLexer : LexerBase() {
         c == '*' && ctx != VALUE -> return emit(S2CfgTypes.ASTERISK, i + 1)
         else -> {
           val end = scanTo(i, ::isDelimiter)
-          // a delimiter no branch above claims (a stray `;` outside braces) would read as a
-          // zero-length word and spin forever; report it as one bad character instead
+          // a delimiter no branch above claims would read as a zero-length word and spin
+          // forever; report it as one bad character instead
           if (end == i) return emit(TokenType.BAD_CHARACTER, i + 1)
           return emit(wordType(i, end), end)
         }

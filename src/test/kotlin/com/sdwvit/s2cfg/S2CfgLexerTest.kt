@@ -1,6 +1,5 @@
 package com.sdwvit.s2cfg
 
-import com.intellij.psi.TokenType
 import junit.framework.TestCase
 
 /** Guards the two lexer properties the IDE's responsiveness depends on: it always makes progress,
@@ -20,10 +19,22 @@ class S2CfgLexerTest : TestCase() {
     return out
   }
 
-  /** A `;` outside `{...}` matches no rule; it used to consume nothing and spin forever. */
-  fun testStraySemicolonTerminates() {
-    val tokens = lex("Foo : struct.begin\n   ;\n   A = 1\nstruct.end\n")
-    assertTrue(tokens.any { it.startsWith(TokenType.BAD_CHARACTER.toString()) })
+  /** A `;` outside `{...}` starts a line comment, and inside `{...}` separates modifiers. */
+  fun testSemicolonIsACommentOutsideBraces() {
+    assertTrue(lex("Foo : struct.begin\n   ;note = 5\nstruct.end\n").any { it == "${S2CfgTypes.COMMENT}:;note = 5" })
+    assertTrue(lex("Foo : struct.begin {refkey=A;bpatch}").any { it == "${S2CfgTypes.SEMICOLON}:;" })
+  }
+
+  /**
+   * Termination is the property that matters: a `;` outside braces used to consume nothing and
+   * spin forever inside start(), freezing the IDE with no stack in the log. [lex] asserts every
+   * token is non-empty and that the whole buffer is consumed, so this is a torture input.
+   */
+  fun testEveryDelimiterTerminates() {
+    val torture = ";:=*[]{}\n} ] * : = ; {\nK = }[*;:\nstruct.end{;}\n[*] : struct.begin {;=}\n"
+    lex(torture)
+    lex(torture.reversed())
+    for (i in 1..torture.length) lex(torture.substring(0, i))
   }
 
   fun testValueKeepsSpecialCharacters() {

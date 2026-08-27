@@ -132,4 +132,47 @@ class S2CfgNavigationTest : BasePlatformTestCase() {
 
   private fun resolveAtCaret(file: PsiFile) =
     file.findReferenceAt(myFixture.caretOffset)!!.resolve()
+
+  /** `FittingWeaponsSIDs/[0] = GunPM_HG` navigates: the array's name is what makes it a reference. */
+  fun testArrayElementResolvesThroughEnclosingArrayName() {
+    myFixture.addFileToProject(
+      "Weapons/Guns.cfg",
+      """
+      GunPM_HG : struct.begin
+         SID = GunPM_HG
+      struct.end
+      """.trimIndent(),
+    )
+    val file = myFixture.configureByText(
+      "Attachment.cfg",
+      """
+      Scope : struct.begin
+         SID = Scope
+         FittingWeaponsSIDs : struct.begin
+            [0] = GunPM_HG
+            [1] = GunAPB_HG
+         struct.end
+      struct.end
+      """.trimIndent(),
+    )
+    val target = resolveValueNamed(file, "GunPM_HG")
+    assertNotNull("[0] = GunPM_HG should resolve", target)
+    assertEquals("Guns.cfg", target!!.containingFile.name)
+  }
+
+  /** Plural and `IDs` spellings carry references too; `Name` does not. */
+  fun testReferenceKeyShapes() {
+    for (key in listOf("SID", "QuestSID", "UpgradePrototypeSIDs", "RequiredUpgradeIDs", "BlockingUpgradeIds")) {
+      assertTrue(key, S2CfgDeclarations.isReferenceKey(key))
+    }
+    for (key in listOf("Name", "MaxDurability", "ItemType")) {
+      assertFalse(key, S2CfgDeclarations.isReferenceKey(key))
+    }
+  }
+
+  private fun resolveValueNamed(file: PsiFile, text: String) =
+    PsiTreeUtil.findChildrenOfType(file, S2CfgValue::class.java)
+      .firstOrNull { it.text.trim() == text }
+      ?.reference
+      ?.resolve()
 }
