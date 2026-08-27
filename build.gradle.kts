@@ -33,12 +33,16 @@ kotlin { jvmToolchain(21) }
 intellijPlatform {
   pluginVerification {
     // `recommended()` asks for IDE builds that are not published for download here.
-    // 2026.1 is what the plugin actually runs on day to day; keep both, since `untilBuild` is open
-    // ended and the listing therefore claims compatibility with everything in between.
-    // Verifying 2026.1 needs network access — drop it from this list to verify offline.
+    //
+    // 2024.3 is what the plugin compiles against; 2026.1 is the line it actually runs on, and
+    // `untilBuild` is open ended, so the listing claims everything in between. Community has no
+    // published archive for the 2026.1 line (`ideaIC-2026.1.1.tar.gz` is a 404), so that end is
+    // covered by Ultimate, which is a superset for API verification.
+    //
+    // Both targets are downloads: `--offline verifyPlugin` only works once they are cached.
     ides {
       ide(IntelliJPlatformType.IntellijIdeaCommunity, "2024.3")
-      ide(IntelliJPlatformType.IntellijIdeaCommunity, "2026.1")
+      ide(IntelliJPlatformType.IntellijIdeaUltimate, "2026.1.1")
     }
   }
 
