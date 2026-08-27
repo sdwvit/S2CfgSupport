@@ -66,6 +66,16 @@ jobs:
       - name: Verify plugin
         run: ./gradlew verifyPlugin
 
+      # A test that passes locally can still fail here, so keep the reports reachable.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests/
+            build/reports/pluginVerifier/
+          if-no-files-found: ignore
+
       - name: Build
         run: ./gradlew buildPlugin
 

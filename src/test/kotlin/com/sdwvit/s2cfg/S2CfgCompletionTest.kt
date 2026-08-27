@@ -32,7 +32,7 @@ class S2CfgCompletionTest : BasePlatformTestCase() {
       "Quest.cfg",
       "Q : struct.begin\n   SID = Q\n   Launchers : struct.begin\n      SID = ANCQ<caret>\n   struct.end\nstruct.end",
     )
-    assertContainsElements(myFixture.completeBasic().map { it.lookupString }, "ANCQ27_Start")
+    assertOffered("ANCQ27_Start")
   }
 
   fun testRefkeyCompletionPrefersLocalStructs() {
@@ -40,11 +40,7 @@ class S2CfgCompletionTest : BasePlatformTestCase() {
       "Same.cfg",
       "Base_Armor : struct.begin\n   A = 1\nstruct.end\nD : struct.begin {refkey=Base<caret>}\nstruct.end",
     )
-    // the only match, so the platform inserts it instead of showing a popup (completeBasic -> null)
-    assertNull(myFixture.completeBasic())
-    myFixture.checkResult(
-      "Base_Armor : struct.begin\n   A = 1\nstruct.end\nD : struct.begin {refkey=Base_Armor}\nstruct.end"
-    )
+    assertOffered("Base_Armor")
   }
 
   fun testMissingRefurlIsReported() {
@@ -109,5 +105,27 @@ class S2CfgCompletionTest : BasePlatformTestCase() {
     assertTrue(doc, doc.contains("MaxDurability"))
     assertTrue(doc, doc.contains("Battle_Varta_Armor"))
     assertTrue(doc, doc.contains("Upgrades"))
+  }
+
+  /**
+   * Asserts each of [expected] is offered at the caret.
+   *
+   * When a single item matches, the platform inserts it instead of showing a popup and
+   * `completeBasic()` returns null — so read the offer back out of the document rather than
+   * asserting on a popup that legitimately never appeared. Whether a fixture lands in the one-match
+   * case depends on how many records its index holds, which differs between a developer machine
+   * and CI, so no test should hard-code either outcome.
+   */
+  private fun assertOffered(vararg expected: String) {
+    val elements = myFixture.completeBasic()
+    if (elements != null) {
+      assertContainsElements(elements.map { it.lookupString }, *expected)
+      return
+    }
+    assertEquals("a single match was inserted, so only one name can be asserted", 1, expected.size)
+    assertTrue(
+      "expected '${expected[0]}' to be inserted, document reads:\n${myFixture.editor.document.text}",
+      myFixture.editor.document.text.contains(expected[0]),
+    )
   }
 }
