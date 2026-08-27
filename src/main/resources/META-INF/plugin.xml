@@ -35,5 +35,27 @@
                              implementationClass="com.sdwvit.s2cfg.S2CfgValueManipulator"/>
     <lang.elementManipulator forClass="com.sdwvit.s2cfg.S2CfgRef"
                              implementationClass="com.sdwvit.s2cfg.S2CfgRefManipulator"/>
+
+    <!-- stage 3: completion and inspections -->
+    <fileBasedIndex implementation="com.sdwvit.s2cfg.S2CfgEnumIndex"/>
+    <completion.contributor language="S2Cfg"
+                            implementationClass="com.sdwvit.s2cfg.S2CfgCompletionContributor"/>
+    <localInspection language="S2Cfg" shortName="S2CfgMissingRefurl"
+                     displayName="Unresolved refurl path" groupName="STALKER 2 Cfg"
+                     enabledByDefault="true" level="WARNING"
+                     implementationClass="com.sdwvit.s2cfg.S2CfgMissingRefurlInspection"/>
+    <localInspection language="S2Cfg" shortName="S2CfgDuplicateKey"
+                     displayName="Duplicate key in struct" groupName="STALKER 2 Cfg"
+                     enabledByDefault="true" level="WARNING"
+                     implementationClass="com.sdwvit.s2cfg.S2CfgDuplicateKeyInspection"/>
+    <localInspection language="S2Cfg" shortName="S2CfgUnresolvedSid"
+                     displayName="Unresolved record reference" groupName="STALKER 2 Cfg"
+                     enabledByDefault="false" level="WARNING"
+                     implementationClass="com.sdwvit.s2cfg.S2CfgUnresolvedSidInspection"/>
+
+    <!-- stage 4: repo-aware extras -->
+    <gotoRelatedProvider implementation="com.sdwvit.s2cfg.S2CfgRelatedProvider"/>
+    <lang.documentationProvider language="S2Cfg"
+                                implementationClass="com.sdwvit.s2cfg.S2CfgDocumentationProvider"/>
   </extensions>
 </idea-plugin>

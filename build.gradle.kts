@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
@@ -30,6 +31,11 @@ tasks.test {
 kotlin { jvmToolchain(21) }
 
 intellijPlatform {
+  pluginVerification {
+    // `recommended()` asks for IDE builds that are not published for download here
+    ides { ide(IntelliJPlatformType.IntellijIdeaCommunity, "2024.3") }
+  }
+
   pluginConfiguration {
     ideaVersion {
       sinceBuild = "243"
