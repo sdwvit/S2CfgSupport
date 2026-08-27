@@ -62,5 +62,7 @@ intellijPlatform {
   // (an account password will not work) and run: PUBLISH_TOKEN=... ./gradlew publishPlugin
   publishing {
     token = providers.environmentVariable("PUBLISH_TOKEN")
+    // `-PpublishChannel=eap` puts the build on the EAP channel instead of the default one
+    channels = providers.gradleProperty("publishChannel").map { listOf(it) }.orElse(listOf("default"))
   }
 }
