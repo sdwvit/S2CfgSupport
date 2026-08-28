@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.2.3"
+version = "0.2.4"
 
 repositories {
   mavenCentral()
@@ -53,6 +53,13 @@ intellijPlatform {
     }
 
     changeNotes = """
+      <h4>0.2.4</h4>
+      <ul>
+        <li><code>PlayerOnlyEffects</code> is recognised as a reference key, so the effect names
+        listed under it — <code>AimingEffects/PlayerOnlyEffects/[*] = Binoculars_01_AimingPP</code>
+        and the like — navigate, complete and rename like <code>*SID</code> values do.</li>
+      </ul>
+
       <h4>0.2.3</h4>
       <ul>
         <li>The key name now picks the target. Record names are not unique across kinds — every

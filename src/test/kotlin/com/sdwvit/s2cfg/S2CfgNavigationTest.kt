@@ -282,4 +282,32 @@ class S2CfgNavigationTest : BasePlatformTestCase() {
     val target = resolveValueNamed(file, "Some_Phrase")
     assertEquals("Phrases.cfg", (target as? S2CfgStruct)?.containingFile?.name)
   }
+
+  /** `PlayerOnlyEffects/[*] = X` names effect records, whatever the enclosing effect block is. */
+  fun testPlayerOnlyEffectsResolve() {
+    myFixture.addFileToProject(
+      "GameData/EffectPrototypes.cfg",
+      """
+      Binoculars_01_AimingPP : struct.begin
+         SID = Binoculars_01_AimingPP
+      struct.end
+      """.trimIndent(),
+    )
+    val file = myFixture.configureByText(
+      "Binoculars.cfg",
+      """
+      Binoculars_01 : struct.begin
+         SID = Binoculars_01
+         AimingEffects : struct.begin
+            PlayerOnlyEffects : struct.begin
+               [*] = Binoculars_01_AimingPP
+            struct.end
+         struct.end
+      struct.end
+      """.trimIndent(),
+    )
+    val target = resolveValueNamed(file, "Binoculars_01_AimingPP")
+    assertNotNull("[*] = Binoculars_01_AimingPP should resolve", target)
+    assertEquals("EffectPrototypes.cfg", target!!.containingFile.name)
+  }
 }

@@ -145,6 +145,7 @@ object S2CfgDeclarations {
     "NPCWeaponAttributes",
     "NodesToCleanUpResults",
     "ObjPrototypeRestrictions",
+    "PlayerOnlyEffects",
     "PlayerWeaponAttributes",
     "PreinstalledUpgrades",
     "ResumeCommentDialogChain",
