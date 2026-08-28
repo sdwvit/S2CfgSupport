@@ -62,10 +62,6 @@ intellijPlatform {
         outside the key's location are dropped before they are parsed, which also makes the resolve
         cheaper. The 139 key-to-location pairs are measured from the shipped GameData, and a
         project laid out differently resolves as before.</li>
-      </ul>
-
-      <h4>0.2.2</h4>
-      <ul>
         <li>Keys that hold a record name without saying so — <code>BlockingBodyMeshes</code>,
         <code>AvailableDialogs</code>, <code>DialogMembers</code>, <code>Faction</code>,
         <code>TargetNode</code>, <code>PreinstalledUpgrades</code> and some forty more — now
