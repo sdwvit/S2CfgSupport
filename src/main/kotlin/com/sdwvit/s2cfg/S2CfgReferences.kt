@@ -6,14 +6,26 @@ import com.intellij.psi.impl.source.resolve.ResolveCache
 import com.intellij.psi.search.GlobalSearchScope
 
 /** `SID = ANCQ27_Start` (nested) / `UpgradeSID = Up_01` -> the struct declaring that name. */
-class S2CfgSidReference(element: PsiElement, range: TextRange, private val name: String) :
+class S2CfgSidReference(
+  element: PsiElement,
+  range: TextRange,
+  private val name: String,
+  /** The key this value was assigned to, which says where its target lives; see [S2CfgTargets]. */
+  private val locationHint: String? = null,
+) :
   PsiReferenceBase.Poly<PsiElement>(element, range, /* soft = */ true) {
 
   override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
     ResolveCache.getInstance(element.project).resolveWithCaching(this, Resolver, false, incompleteCode)
 
   private fun resolveUncached(): Array<ResolveResult> =
-    S2CfgDeclarations.findByName(element.project, name, GlobalSearchScope.projectScope(element.project))
+    S2CfgDeclarations
+      .findByName(
+        element.project,
+        name,
+        GlobalSearchScope.projectScope(element.project),
+        locationHint = locationHint,
+      )
       .map { PsiElementResolveResult(it) }
       .toTypedArray()
 
@@ -85,8 +97,9 @@ object S2CfgReferenceFactory {
       return PsiReference.EMPTY_ARRAY
     }
     val text = value.text
+    val hint = S2CfgTargets.hintFor(key)
     return nameRanges(text)
-      .map { range -> S2CfgSidReference(value, range, range.substring(text)) }
+      .map { range -> S2CfgSidReference(value, range, range.substring(text), hint) }
       .toTypedArray()
   }
 

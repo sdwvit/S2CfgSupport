@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.2.2"
+version = "0.2.3"
 
 repositories {
   mavenCentral()
@@ -53,6 +53,17 @@ intellijPlatform {
     }
 
     changeNotes = """
+      <h4>0.2.3</h4>
+      <ul>
+        <li>The key name now picks the target. Record names are not unique across kinds — every
+        prototype file may declare its own <code>Default</code> — so <code>LastPhraseSID</code>
+        resolves into <code>DialogPrototypes/</code> and <code>UpgradeSID</code> into
+        <code>UpgradePrototypes.cfg</code> instead of offering every same-named record. Candidates
+        outside the key's location are dropped before they are parsed, which also makes the resolve
+        cheaper. The 139 key-to-location pairs are measured from the shipped GameData, and a
+        project laid out differently resolves as before.</li>
+      </ul>
+
       <h4>0.2.2</h4>
       <ul>
         <li>Keys that hold a record name without saying so — <code>BlockingBodyMeshes</code>,

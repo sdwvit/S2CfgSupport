@@ -37,12 +37,17 @@ object S2CfgDeclarations {
    *
    * Each candidate file has to be parsed into PSI, so the limit matters: a name that appears in a
    * thousand files would otherwise mean a thousand full parses inside a single resolve.
+   *
+   * [locationHint] is the reference key's target location (see [S2CfgTargets]). When any candidate
+   * file matches it, the others are dropped unparsed — that is both the fast path and the accurate
+   * one, since the same name is often declared once per kind of record.
    */
   fun findByName(
     project: Project,
     name: String,
     scope: GlobalSearchScope,
     limit: Int = MAX_RESULTS,
+    locationHint: String? = null,
   ): List<S2CfgStruct> {
     if (name.isEmpty()) return emptyList()
     // resolving during indexing would throw IndexNotReadyException; an empty result degrades better
@@ -50,7 +55,11 @@ object S2CfgDeclarations {
 
     return S2CfgLog.timed(what = { "findByName('$name')" }) {
       val manager = PsiManager.getInstance(project)
-      val files = FileBasedIndex.getInstance().getContainingFiles(S2CfgSidIndex.NAME, name, scope)
+      val all = FileBasedIndex.getInstance().getContainingFiles(S2CfgSidIndex.NAME, name, scope)
+      val files = locationHint
+        ?.let { hint -> all.filter { S2CfgTargets.matches(it, hint) } }
+        ?.takeIf { it.isNotEmpty() }
+        ?: all
       val found = ArrayList<S2CfgStruct>()
       for (file in files) {
         ProgressManager.checkCanceled()

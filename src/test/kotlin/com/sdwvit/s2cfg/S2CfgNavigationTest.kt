@@ -241,4 +241,45 @@ class S2CfgNavigationTest : BasePlatformTestCase() {
       assertEmpty(text, value.references.toList())
     }
   }
+
+  /** The same name is declared in two kinds of file; the key says which one is meant. */
+  fun testKeyNameNarrowsAmbiguousTarget() {
+    myFixture.addFileToProject(
+      "DialogPrototypes/D.cfg",
+      "Shared_Name : struct.begin\n   SID = Shared_Name\nstruct.end",
+    )
+    myFixture.addFileToProject(
+      "UpgradePrototypes.cfg",
+      "Shared_Name : struct.begin\n   SID = Shared_Name\nstruct.end",
+    )
+    val file = myFixture.configureByText(
+      "Quest.cfg",
+      """
+      Node : struct.begin
+         SID = Node
+         LastPhraseSID = Shared_Name
+         UpgradeSID = Shared_Name
+      struct.end
+      """.trimIndent(),
+    )
+    val byKey = PsiTreeUtil.findChildrenOfType(file, S2CfgEntry::class.java)
+      .filter { it.valueText == "Shared_Name" }
+      .associate { it.keyName to it.valueElement!!.reference!!.resolve() }
+    assertEquals("D.cfg", (byKey["LastPhraseSID"] as S2CfgStruct).containingFile.name)
+    assertEquals("UpgradePrototypes.cfg", (byKey["UpgradeSID"] as S2CfgStruct).containingFile.name)
+  }
+
+  /** A project that does not mirror the GameData layout still resolves: the hint is dropped. */
+  fun testHintIsIgnoredWhenNothingMatchesIt() {
+    myFixture.addFileToProject(
+      "MyMod/Phrases.cfg",
+      "Some_Phrase : struct.begin\n   SID = Some_Phrase\nstruct.end",
+    )
+    val file = myFixture.configureByText(
+      "Quest.cfg",
+      "Node : struct.begin\n   SID = Node\n   LastPhraseSID = Some_Phrase\nstruct.end",
+    )
+    val target = resolveValueNamed(file, "Some_Phrase")
+    assertEquals("Phrases.cfg", (target as? S2CfgStruct)?.containingFile?.name)
+  }
 }

@@ -1,0 +1,172 @@
+package com.sdwvit.s2cfg
+
+import com.intellij.openapi.vfs.VirtualFile
+
+/**
+ * Where a reference key's target lives.
+ *
+ * GameData keeps one kind of record per file or per directory, and a key names exactly one of them:
+ * `LastPhraseSID` always points into `DialogPrototypes/`, `UpgradePrototypeSIDs` into
+ * `UpgradePrototypes.cfg`. Names are not unique across kinds — every prototype file is free to
+ * declare its own `Default` — so the key is what tells a resolve which candidate was meant.
+ *
+ * The map is measured rather than guessed: every entry in the shipped GameData whose value names a
+ * record declared in exactly one place was counted, and a key is listed when at least ten of those
+ * landed in one directory (or one top-level file) and at least 19 in 20 agreed. Generic keys that
+ * legitimately point anywhere — `SID` above all — therefore do not appear.
+ *
+ * A hint only narrows candidates and is dropped when it matches none of them, so a project laying
+ * its files out differently resolves exactly as it did before.
+ */
+object S2CfgTargets {
+
+  /** The location [key]'s values live in, or null when the key can point anywhere. */
+  fun hintFor(key: String): String? = TARGETS[key]
+
+  /** True when [file] is the file, or sits in the directory, that [hint] names. */
+  fun matches(file: VirtualFile, hint: String): Boolean =
+    if (hint.endsWith(".cfg")) file.name.equals(hint, ignoreCase = true)
+    else hint.equals(file.parent?.name, ignoreCase = true)
+
+  private val TARGETS = mapOf(
+    "AbilityPrototypeSID" to "AbilityPrototypes",
+    "ActiveEffectSIDs" to "EffectPrototypes.cfg",
+    "AgentPrototypeSID" to "ObjPrototypes",
+    "AimAssistParamsSID" to "ObjAimAssistParamsPrototypes.cfg",
+    "AimAssistWeightsSID" to "AimAssistWeightsPrototypes.cfg",
+    "AllowedUserRestriction" to "NPCPrototypes.cfg",
+    "AlternativeEffectPrototypeSIDs" to "EffectPrototypes.cfg",
+    "AnomaliesPresets" to "SpawnActorPrototypes",
+    "AnomalySID" to "AnomalyPrototypes.cfg",
+    "ApplyExtraEffectPrototypeSIDs" to "EffectPrototypes.cfg",
+    "AttachPrototypeSID" to "ItemPrototypes",
+    "AttachPrototypeSIDs" to "ItemPrototypes",
+    "AttachSID" to "ItemPrototypes",
+    "AudiologChainPrototypeSID" to "DialogChainPrototypes",
+    "AvailableDialogs" to "DialogChainPrototypes",
+    "AvailableObjPrototypes" to "ObjPrototypes",
+    "BinocularsParamsSID" to "ObjBinocularsParamsPrototypes.cfg",
+    "BlockingBodyMeshes" to "BodyMeshPrototypes",
+    "BlockingUpgradePrototypeSIDs" to "UpgradePrototypes.cfg",
+    "BodyMeshSID" to "BodyMeshPrototypes",
+    "BusyCommentDialogChain" to "DialogChainPrototypes",
+    "ByeDialogChain" to "DialogChainPrototypes",
+    "CharacterWeaponSettingsSID" to "WeaponData",
+    "ClueVariablePrototypeSID" to "GlobalVariablePrototypes",
+    "ConditionSID" to "BoolProviderPrototypes",
+    "ContaineredQuestPrototypeSID" to "QuestPrototypes",
+    "CorpsePrototypeSID" to "CorpsePrototypes.cfg",
+    "CurrentFastTravelLocationPrototypeSID" to "FastTravelLocationPrototypes.cfg",
+    "DecalsMaterialSID" to "ImpactPhysicalMaterialPrototypes.cfg",
+    "DefaultWeaponSettingsSID" to "WeaponData",
+    "DefeatCommentDialogChain" to "DialogChainPrototypes",
+    "DefeatTopicDialogChain" to "DialogChainPrototypes",
+    "DestinationFastTravelLocationPrototypeSID" to "FastTravelLocationPrototypes.cfg",
+    "DialogChainPrototypeSID" to "DialogChainPrototypes",
+    "DialogMembers" to "SpawnActorPrototypes",
+    "EffectOnPickPrototypeSIDs" to "EffectPrototypes.cfg",
+    "EffectPrototypeSID" to "EffectPrototypes.cfg",
+    "EffectPrototypeSIDs" to "EffectPrototypes.cfg",
+    "EffectSID" to "EffectPrototypes.cfg",
+    "EffectSIDs" to "EffectPrototypes.cfg",
+    "EffectsToBlockIDs" to "EffectPrototypes.cfg",
+    "FaceBlockingBlendMaskPrototypeSID" to "FaceBlockingBlendMaskPrototypes.cfg",
+    "FirstTargetSID" to "SpawnActorPrototypes",
+    "FlairSensorPrototypeSID" to "AIPrototypes",
+    "GeneralWeaponSetup" to "WeaponData",
+    "GroomBlockingMappingPrototypeSID" to "GroomBlockingMappingPrototypes.cfg",
+    "GroomPrototypeSID" to "GroomGeneratorPrototypes.cfg",
+    "GroupSID" to "CameraShakeGroupPrototypes.cfg",
+    "HelloDialogChain" to "DialogChainPrototypes",
+    "ImmuneObjPrototypeSIDs" to "ObjPrototypes",
+    "ImpactPhysicalMaterialPrototypeSID" to "ImpactPhysicalMaterialPrototypes.cfg",
+    "InfotopicDialogs" to "DialogChainPrototypes",
+    "InitialInhabitantFaction" to "MusicManagerPrototypes.cfg",
+    "InteractableQuestGuid" to "SpawnActorPrototypes",
+    "InteractionEffectPrototypeSIDs" to "EffectPrototypes.cfg",
+    "InterchangeableUpgradePrototypeSIDs" to "UpgradePrototypes.cfg",
+    "ItemPrototypeSID" to "ItemPrototypes",
+    "ItemSID" to "ItemPrototypes",
+    "Items" to "ItemPrototypes",
+    "JournalQuestSID" to "JournalQuestPrototypes",
+    "JournalQuestStageSID" to "QuestNodePrototypes",
+    "LairCoreVolumes" to "SpawnActorPrototypes",
+    "LairPrototypeSID" to "LairPrototypes",
+    "LairTerritoryVolumes" to "SpawnActorPrototypes",
+    "LastPhraseSID" to "DialogPrototypes",
+    "LinkedNodePrototypeSID" to "QuestNodePrototypes",
+    "MagnetismAimAssistConeSIDs" to "AimAssistConePrototypes.cfg",
+    "MainInfoTopicOwner" to "SpawnActorPrototypes",
+    "MarkerSID" to "MarkerPrototypes.cfg",
+    "MarkerTargetQuestGuid" to "SpawnActorPrototypes",
+    "MaterialSID" to "PostProcessMaterialPrototypes.cfg",
+    "MeshInWorldPrototypeSID" to "MeshPrototypes.cfg",
+    "MeshPrototypeSID" to "MeshPrototypes.cfg",
+    "MoveToPath" to "SpawnActorPrototypes",
+    "MovementVFXPrototypeSID" to "MovementFXPrototypes.cfg",
+    "MovingTrackingAimAssistConeSID" to "AimAssistConePrototypes.cfg",
+    "NPCMarker" to "MarkerPrototypes.cfg",
+    "NPCPrototypeSID" to "NPCPrototypes.cfg",
+    "NPCWeaponAttributes" to "WeaponData",
+    "NeedsPresetSID" to "NPCNeedsPresetPrototypes.cfg",
+    "NextDialogSID" to "DialogPrototypes",
+    "NextLaunchedPhraseSID" to "DialogPrototypes",
+    "NodesToCleanUpResults" to "QuestNodePrototypes",
+    "NotePrototypeSID" to "NotePrototypes.cfg",
+    "ObjPrototypeRestrictions" to "NPCPrototypes.cfg",
+    "ObjPrototypeSIDs" to "ObjPrototypes",
+    "PDATutorialNoteSID" to "PDATutorialPrototypes.cfg",
+    "PackOfItemsPrototypeSID" to "PackOfItemsGroupPrototypes.cfg",
+    "ParamSID" to "PostProcessParamPrototypes.cfg",
+    "PatrolPlaceholderGUID" to "SpawnActorPrototypes",
+    "PhysicsInteractionPrototypeSID" to "PhysicsInteractionPrototypes.cfg",
+    "PhysicsSoundSID" to "PhysicsInteractionPrototypes.cfg",
+    "PlayerWeaponAttributes" to "WeaponData",
+    "PostEffectProcessorSID" to "PostEffectProcessorPrototypes.cfg",
+    "PreinstalledUpgrades" to "UpgradePrototypes.cfg",
+    "ProcessorSID" to "PostEffectProcessorPrototypes.cfg",
+    "ProjectilePrototypeSID" to "ProjectilePrototypes.cfg",
+    "QuestSID" to "QuestPrototypes",
+    "RefreshConditionSID" to "BoolProviderPrototypes",
+    "RequiredItemPrototypeSIDs" to "ItemPrototypes",
+    "RequiredUpgradeIDs" to "UpgradePrototypes.cfg",
+    "RequiredUpgradePrototypeSIDs" to "UpgradePrototypes.cfg",
+    "RestrictedObjPrototypeSIDs" to "ObjPrototypes",
+    "ResumeCommentDialogChain" to "DialogChainPrototypes",
+    "SecondTargetSID" to "SpawnActorPrototypes",
+    "ShootCameraShakePrototypeSID" to "CameraShakePrototypes.cfg",
+    "ShouldBeKilled" to "SpawnActorPrototypes",
+    "SnappingAimAssistConeSID" to "AimAssistConePrototypes.cfg",
+    "SpawnAbilityItemSIDs" to "DestructibleObjectPrototypes.cfg",
+    "SquadMembersQuestSIDs" to "SpawnActorPrototypes",
+    "StaggerEffectPrototypeSID" to "EffectPrototypes.cfg",
+    "StartingDialogPrototypeSID" to "DialogPrototypes",
+    "StashPrototypeSID" to "StashPrototypes.cfg",
+    "StationaryTrackingAimAssistConeSID" to "AimAssistConePrototypes.cfg",
+    "StayContextualAction" to "SpawnActorPrototypes",
+    "StickinessAimAssistConeSID" to "AimAssistConePrototypes.cfg",
+    "TargetContextualActionPlaceholder" to "SpawnActorPrototypes",
+    "TargetItemContainer" to "SpawnActorPrototypes",
+    "TargetNPC" to "SpawnActorPrototypes",
+    "TargetNode" to "QuestNodePrototypes",
+    "TargetPlaceholder" to "SpawnActorPrototypes",
+    "TargetQuestGuid" to "SpawnActorPrototypes",
+    "TargetQuestGuids" to "SpawnActorPrototypes",
+    "TextToolPhraseSID" to "DialogPrototypes",
+    "Title" to "MarkerPrototypes.cfg",
+    "TradePrototypeSID" to "TradePrototypes.cfg",
+    "Trigger" to "SpawnActorPrototypes",
+    "TriggerQuestGuid" to "SpawnActorPrototypes",
+    "TutorialSID" to "PDATutorialPrototypes.cfg",
+    "UpgradePrototypeSID" to "UpgradePrototypes.cfg",
+    "UpgradePrototypeSIDs" to "UpgradePrototypes.cfg",
+    "UpgradeSID" to "UpgradePrototypes.cfg",
+    "UpgradeSIDs" to "UpgradePrototypes.cfg",
+    "ValueProviderSID" to "FloatProviderPrototypes",
+    "VoiceModulatorPrototypeID" to "VoiceModulatorPrototypes.cfg",
+    "VoiceModulatorSID" to "VoiceModulatorPrototypes.cfg",
+    "Volume" to "SpawnActorPrototypes",
+    "VolumeDailySchedulePresetSID" to "DailySchedulePrototypes.cfg",
+    "VolumeSID" to "WeatherSelectionPrototypes.cfg",
+  )
+}
