@@ -23,8 +23,8 @@ on:
         type: boolean
         default: false
 
-# The publish job needs `deployments` to enter the gated environment; nothing needs write access
-# to repository contents.
+# The publish job needs `deployments` to enter the gated environment and no write access at all;
+# only the release job that follows it writes to repository contents, and it never sees the token.
 permissions:
   contents: read
 
@@ -129,3 +129,54 @@ jobs:
             exit 1
           fi
           ./gradlew publishPlugin -PpublishChannel=${{ inputs.channel || 'default' }}
+
+  # A Marketplace upload leaves nothing behind on GitHub, so the tag alone would not say what
+  # shipped. This mirrors it to https://github.com/sdwvit/S2CfgSupport/releases, with the same
+  # notes the Marketplace shows and the exact zip that was uploaded — the artifact the build job
+  # produced, not a rebuild. It runs only after a successful publish, so a release page always
+  # means the plugin really shipped.
+  release:
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # the one job allowed to write, and the only one with no access to the publish token
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: plugin-distribution
+          path: dist
+
+      # changeNotes in build.gradle.kts is the single source of truth for what a version changed,
+      # so the release body is cut out of it rather than written twice. GitHub renders the HTML.
+      - name: Take this version's notes out of build.gradle.kts
+        run: |
+          python3 - "${GITHUB_REF_NAME#v}" <<'PY' > notes.html
+          import re, sys
+          version = sys.argv[1]
+          text = open("build.gradle.kts").read()
+          section = re.search(
+              rf"<h4>{re.escape(version)}</h4>(.*?)(?=<h4>|\"\"\")",
+              text,
+              re.S,
+          )
+          if not section:
+              sys.exit(f"::error::no <h4>{version}</h4> section in the changeNotes")
+          print(section.group(1).strip())
+          PY
+          cat notes.html
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.html \
+            --verify-tag
