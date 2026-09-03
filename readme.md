@@ -26,6 +26,17 @@ Install it from the IDE with Settings | Plugins | Marketplace, and search for "S
 - Go to Symbol (Ctrl+Alt+Shift+N) by SID
 - Navigate | Related Symbol moves between `Foo_patch_MyMod.cfg` and the `Foo.cfg` it patches
 
+**Localization assets**
+- A Mod SDK `*-localization.uasset` package opens as the JSON its `LocalizedTexts` export
+  describes, and is written back into the binary package on save — no SDK round trip to change a
+  line of dialogue
+- Recognised by the package header, not the file name
+- Copy JSON / Paste JSON in the editor toolbar, in the same shape the S2Mods
+  `localization-uasset.mts` dump prints, so a document moves between the two tools
+- A document that is not valid JSON, or not a localization document, is not saved: the banner under
+  the editor says why. A language the package's name table does not hold is refused too, since the
+  writer cannot add one
+
 **Writing**
 - Completion for enum literals, narrowed to the ones the corpus actually assigns to that key
 - Completion for `SID` values and `refkey`
@@ -60,8 +71,8 @@ another record. Only the former is indexed.
 ## Building
 
 ```bash
-JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew buildPlugin   # -> build/distributions/S2CfgSupport-0.2.0.zip
-JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew test          # 31 tests, incl. a parse of the whole S2Mods corpus
+JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew buildPlugin   # -> build/distributions/S2CfgSupport-0.3.0.zip
+JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew test          # 50 tests, incl. a parse of the whole S2Mods corpus
 JAVA_HOME=~/.jdks/jbr-17.0.14 ./gradlew runIde        # sandbox IDE
 ```
 

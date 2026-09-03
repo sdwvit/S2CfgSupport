@@ -9,6 +9,9 @@
     and commenting. Ctrl-click navigation between records: <code>SID</code> references,
     <code>refkey</code> inheritance and <code>refurl</code> file paths all resolve, with find
     usages and rename.
+    <br/>
+    Mod SDK <code>*-localization.uasset</code> packages open as JSON — edit the SIDs and their
+    per-language strings, and saving writes them back into the binary package.
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
@@ -53,9 +56,20 @@
                      enabledByDefault="false" level="WARNING"
                      implementationClass="com.sdwvit.s2cfg.S2CfgUnresolvedSidInspection"/>
 
+    <!-- stage 5: *-localization.uasset packages, edited as JSON -->
+    <fileType name="STALKER 2 Asset" implementationClass="com.sdwvit.s2cfg.S2UassetFileType"
+              fieldName="INSTANCE" extensions="uasset"/>
+    <fileEditorProvider implementation="com.sdwvit.s2cfg.S2LocalizationEditorProvider"/>
+
     <!-- stage 4: repo-aware extras -->
     <gotoRelatedProvider implementation="com.sdwvit.s2cfg.S2CfgRelatedProvider"/>
     <lang.documentationProvider language="S2Cfg"
                                 implementationClass="com.sdwvit.s2cfg.S2CfgDocumentationProvider"/>
   </extensions>
+
+  <applicationListeners>
+    <!-- The localization editor's document is in-memory, so it has to be written through on save. -->
+    <listener class="com.sdwvit.s2cfg.S2LocalizationSaveListener"
+              topic="com.intellij.openapi.fileEditor.FileDocumentManagerListener"/>
+  </applicationListeners>
 </idea-plugin>

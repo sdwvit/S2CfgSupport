@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.2.4"
+version = "0.3.0"
 
 repositories {
   mavenCentral()
@@ -53,6 +53,23 @@ intellijPlatform {
     }
 
     changeNotes = """
+      <h4>0.3.0</h4>
+      <p><b>Localization assets are editable.</b> A Mod SDK <code>*-localization.uasset</code>
+      package now opens as the JSON its <code>LocalizedTexts</code> export describes — SIDs and
+      their per-language strings — and saving writes the edited JSON back into the binary
+      package, so a line of dialogue no longer needs an SDK round trip.</p>
+      <ul>
+        <li>Packages are recognised by their header rather than by their name.</li>
+        <li><b>Copy JSON</b> and <b>Paste JSON</b> in the editor toolbar, in the shape the S2Mods
+        <code>localization-uasset.mts</code> dump prints, so documents move between the two
+        tools.</li>
+        <li>Nothing is written while the document does not parse or does not describe a
+        localization document; the banner under the editor says why. A language the package's name
+        table does not hold is refused too, since the writer cannot add one. Only the one
+        <code>LocalizationModTextToolAsset</code> export is re-serialised — the rest of the package
+        is copied through byte for byte.</li>
+      </ul>
+
       <h4>0.2.4</h4>
       <ul>
         <li><code>PlayerOnlyEffects</code> is recognised as a reference key, so the effect names
