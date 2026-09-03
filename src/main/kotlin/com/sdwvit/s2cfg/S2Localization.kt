@@ -9,7 +9,7 @@ class S2LocalizationException(message: String, val offset: Int = -1) : Exception
 /**
  * The bridge between a `*-localization.uasset` package and the JSON document the editor shows.
  *
- * The JSON shape is deliberately the same one the S2Mods `localization-uasset.mts` dump prints —
+ * The JSON shape is deliberately the same one the S2Mods `src/localization/uasset.mts` dump prints —
  * `{"LocalizedTexts": [{"SID": …, "LanguagesToLocalizedStrings": {…}}]}` — so a document can be
  * copied between the two tools.
  */
@@ -60,10 +60,11 @@ object S2Localization {
    *
    * Everything that would make the write fail is checked here, so the caller can refuse to save
    * with a message instead of leaving a half-written package behind: JSON syntax, the document
-   * schema, and — since the writer never grows the package name table — that every language key
-   * already exists in [names]. Pass `names = null` to validate the shape only.
+   * schema, and that every language key can be hashed into an FName. A language the package was
+   * not saved with is fine — the writer rebuilds the name table around whatever the document
+   * needs — but a non-ASCII one is not, because `FNameEntrySerialized`'s hashes are byte-wise.
    */
-  fun parse(text: String, names: List<String>?): List<S2LocalizedText> {
+  fun parse(text: String): List<S2LocalizedText> {
     val root = S2Json.parse(text)
     if (root !is S2JsonValue.Obj)
       throw S2LocalizationException("the top-level value must be an object", 0)
@@ -93,12 +94,10 @@ object S2Localization {
       for ((language, value) in languages.entries) {
         if (value !is S2JsonValue.Str)
           throw S2LocalizationException("$where.${S2UassetFormat.LANGUAGES}.$language must be a string")
-        if (names != null && language !in names) {
-          // The writer cannot add names to the package, so a language the SDK did not put there
-          // would produce a package the game silently ignores. Refuse instead.
+        if (!language.all { it.code in 0..0x7f }) {
           throw S2LocalizationException(
-            "$where.${S2UassetFormat.LANGUAGES} names \"$language\", which is not in this " +
-              "package's name table — only the languages it was saved with can be edited here"
+            "$where.${S2UassetFormat.LANGUAGES} names \"$language\", which is not ASCII — " +
+              "language keys become FNames and cannot be hashed"
           )
         }
         if (strings.put(language, value.value) != null)
@@ -110,8 +109,6 @@ object S2Localization {
 
   /** Applies the editor's [text] to [original] package bytes, or throws if [text] is invalid. */
   fun apply(original: ByteArray, text: String): ByteArray {
-    val asset = S2UassetFormat.parse(original)
-    val entries = parse(text, asset.names)
-    return S2UassetFormat.withLocalizedTexts(original, entries)
+    return S2UassetFormat.withLocalizedTexts(original, parse(text))
   }
 }

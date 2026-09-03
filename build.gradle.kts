@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sdwvit"
-version = "0.3.0"
+version = "0.4.0"
 
 repositories {
   mavenCentral()
@@ -53,6 +53,31 @@ intellijPlatform {
     }
 
     changeNotes = """
+      <h4>0.4.0</h4>
+      <p><b>A localization asset whose package name does not match where it sits is called out.</b>
+      The advice for making a mod's first text asset was to copy another mod's and rename the file,
+      which leaves the package still pointing at the mod it came from — the game then looks for its
+      strings under that mod's namespace and finds none. The editor now says so in a banner, and
+      <b>Fix package name</b> rewrites it: the summary, both hashed names in the name table, the
+      asset registry's own spellings, and a fresh <code>LocalizationId</code> derived from the new
+      name rather than inherited. Point the plugin at the SDK's <code>Content</code> directory under
+      Settings | Tools | STALKER 2 Cfg to turn the check on; it stays off until you do.</p>
+
+      <p><b>Any language can be added to a localization asset.</b> Saving used to refuse a language
+      the package's name table did not already hold, because the writer kept the header byte for
+      byte and could not grow that table. It now rebuilds it — adding the names the document needs,
+      dropping the ones the old entries used, re-sorting the export-data half and moving every
+      stored offset behind it — so a package saved with English alone can be given Ukrainian in the
+      editor.</p>
+      <ul>
+        <li>An asset rewritten with fewer entries now <i>shrinks</i>, instead of carrying the
+        previous text's names along in the name table.</li>
+        <li>The bytes a save produces depend only on the package's identity and the document, not
+        on what the file happened to hold before.</li>
+        <li>Rewriting a package the Mod Editor wrote reproduces its bytes exactly — the tests pin
+        that against three assets the editor itself saved.</li>
+      </ul>
+
       <h4>0.3.0</h4>
       <p><b>Localization assets are editable.</b> A Mod SDK <code>*-localization.uasset</code>
       package now opens as the JSON its <code>LocalizedTexts</code> export describes — SIDs and
@@ -61,7 +86,7 @@ intellijPlatform {
       <ul>
         <li>Packages are recognised by their header rather than by their name.</li>
         <li><b>Copy JSON</b> and <b>Paste JSON</b> in the editor toolbar, in the shape the S2Mods
-        <code>localization-uasset.mts</code> dump prints, so documents move between the two
+        <code>src/localization/uasset.mts</code> dump prints, so documents move between the two
         tools.</li>
         <li>Nothing is written while the document does not parse or does not describe a
         localization document; the banner under the editor says why. A language the package's name

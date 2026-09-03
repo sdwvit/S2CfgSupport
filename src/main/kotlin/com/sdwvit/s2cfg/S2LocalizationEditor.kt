@@ -94,6 +94,12 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
 
   private val changes = PropertyChangeSupport(this)
   private val validation = Wrapper()
+
+  /**
+   * The package-name banner, kept separate from [validation]: it reports something about the file
+   * on disk rather than about the text, so it stays up while the document is being edited.
+   */
+  private val packageName = Wrapper()
   private val panel = JPanel(BorderLayout())
   /**
    * Coalesces validation while the user types. A Swing timer rather than the platform's `Alarm`:
@@ -107,12 +113,6 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
   internal val document: Document
   private val editor: EditorEx
 
-  /**
-   * The package's name table, as it was when the editor opened. The writer cannot add to it, so
-   * validation needs it — and re-reading the package on every keystroke to get it would not do.
-   */
-  private val names: List<String>
-
   /** The text last known to match the package on disk; what [isModified] compares against. */
   private var savedText: String
 
@@ -121,7 +121,6 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
 
   init {
     val asset = S2UassetFormat.parse(file.contentsToByteArray())
-    names = asset.names
     savedText = S2Localization.toJson(asset)
     // A `.json` name is all it takes for the platform's JSON support — highlighting, folding,
     // structure view, its own syntax errors — to apply to the in-memory document.
@@ -146,9 +145,17 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
 
     panel.add(toolbar(), BorderLayout.NORTH)
     panel.add(editor.component, BorderLayout.CENTER)
-    panel.add(validation, BorderLayout.SOUTH)
+    panel.add(
+      JPanel().apply {
+        layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS)
+        add(packageName)
+        add(validation)
+      },
+      BorderLayout.SOUTH,
+    )
     OPEN.add(this)
     validate()
+    checkPackageName()
   }
 
   private fun toolbar(): JComponent {
@@ -193,7 +200,7 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
       return
     }
     val entries = try {
-      S2Localization.parse(text, names)
+      S2Localization.parse(text)
     } catch (e: Exception) {
       Messages.showErrorDialog(
         project,
@@ -223,6 +230,54 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
     validate()
   }
 
+  /**
+   * Shows the banner when the package's own name does not match where the file sits in the SDK.
+   *
+   * The old advice for making a mod's first text asset was to copy another mod's and rename the
+   * file, which leaves the package pointing at the mod it came from — the game then looks up its
+   * strings under that mod's namespace and finds nothing. The mismatch is invisible in the SDK,
+   * so the editor is the first place anyone can see it.
+   */
+  private fun checkPackageName() {
+    packageName.removeAll()
+    val expected = runCatching {
+      S2CfgSettings.packageNameFor(S2CfgSettings.getInstance().sdkContentRoot, file.path)
+    }.getOrNull()
+    val actual = runCatching { S2UassetFormat.parse(file.contentsToByteArray()).summary.packageName }
+      .getOrNull()
+    if (expected != null && actual != null && expected != actual) {
+      packageName.setContent(
+        EditorNotificationPanel(EditorNotificationPanel.Status.Warning)
+          .text(
+            "Package name is $actual, but this file's path implies $expected — " +
+              "the game will not load its strings."
+          )
+          .also { it.createActionLabel("Fix package name") { renamePackage(expected) } }
+      )
+    }
+    packageName.revalidate()
+    packageName.repaint()
+  }
+
+  /**
+   * Rewrites the package on disk under [expected]. Only the header is touched, and [save] re-reads
+   * the file, so this is safe to do with unsaved edits in the document.
+   */
+  private fun renamePackage(expected: String) {
+    try {
+      val bytes = S2UassetFormat.renameLocalizationPackage(file.contentsToByteArray(), expected)
+      ApplicationManager.getApplication().runWriteAction { file.setBinaryContent(bytes) }
+    } catch (e: Exception) {
+      S2CfgLog.LOG.warn("could not rename ${file.name}", e)
+      Messages.showErrorDialog(
+        project,
+        "Could not rename ${file.name}:\n${e.message}",
+        "Fix Package Name",
+      )
+    }
+    checkPackageName()
+  }
+
   /** Re-checks the text and shows or hides the banner that explains why a save is blocked. */
   private fun validate() {
     error = describeProblem(document.text)
@@ -237,7 +292,7 @@ class S2LocalizationEditor(private val project: Project, private val file: Virtu
   }
 
   private fun describeProblem(text: String): String? = try {
-    S2Localization.parse(text, names)
+    S2Localization.parse(text)
     null
   } catch (e: S2JsonException) {
     val at = if (e.offset >= 0) " at line ${lineOf(text, e.offset)}" else ""

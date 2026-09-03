@@ -6,7 +6,7 @@ import java.nio.ByteOrder
 /**
  * Minimal reader for UE5 `.uasset` packages as written by the STALKER 2 Mod SDK
  * (`LegacyFileVersion -8`, `FileVersionUE4 522`, `FileVersionUE5 1013` — UE 5.4 era). Ported from
- * the S2Mods `localization-uasset.mts` reference reader.
+ * the S2Mods `src/localization/uasset.mts` reference reader.
  *
  * Two things differ from the older `.uasset` layouts most parsers implement:
  *
@@ -57,12 +57,25 @@ class S2UassetExport(
   var properties: Map<String, S2PropertyValue>? = null,
 )
 
+/** The byte position of a stored offset field, and how wide it is. */
+class S2OffsetField(val at: Int, val bytes: Int)
+
 class S2UassetSummary(
   val legacyFileVersion: Int,
   val fileVersionUE5: Int,
+  val totalHeaderSize: Int,
   val packageName: String,
+  /** Where the `PackageName` FString starts, so a rename can splice a different-length one in. */
+  val packageNameAt: Int,
+  /** The namespace the package's gathered text lives under: an md5 of the package name. */
+  val localizationId: String,
   val nameCount: Int,
   val nameOffset: Int,
+  /**
+   * Where `NameOffset` sits. The table start does not move when the table is *resized*, but a
+   * rename splices the package name in front of it, so a rename does have to shift it.
+   */
+  val nameOffsetAt: Int,
   val exportCount: Int,
   val exportOffset: Int,
   val importCount: Int,
@@ -78,12 +91,31 @@ class S2UassetSummary(
    */
   val bulkDataStartOffsetAt: Int?,
   val payloadTocOffsetAt: Int?,
+  /** Where `NameCount` sits, so a writer that grows the name table can correct it. */
+  val nameCountAt: Int,
+  /**
+   * Where each generation's `NameCount` sits. The last one mirrors the summary's and the editor
+   * trusts it, so growing the table has to grow these too.
+   */
+  val generationNameCountsAt: List<Int>,
+  /** Where `NamesReferencedFromExportDataCount` sits — the length of the sorted table prefix. */
+  val namesReferencedFromExportDataCountAt: Int?,
+  /** Where `AssetRegistryDataOffset` sits; the section it points at stores offsets of its own. */
+  val assetRegistryDataOffsetAt: Int?,
+  /**
+   * Every offset field in the summary that points *behind* the name table, so resizing the table
+   * can shift them all without naming them one at a time. `NameOffset` itself is deliberately not
+   * here: the table start does not move.
+   */
+  val postNameOffsetFieldsAt: List<S2OffsetField>,
 )
 
 class S2Uasset(
   val summary: S2UassetSummary,
   /** Derived from the table bounds, not hardcoded — see `readExports`. */
   val exportStride: Int,
+  /** Where the name table's bytes end, so a writer can measure how much a rebuilt one grows. */
+  val nameTableEnd: Int,
   val names: List<String>,
   val imports: List<S2UassetImport>,
   val exports: List<S2UassetExport>,
@@ -147,6 +179,7 @@ object S2UassetFormat {
     val r = Reader(bytes)
     val summary = readSummary(r)
     val names = readNameTable(r, summary)
+    val nameTableEnd = r.pos
     val imports = readImports(r, summary, names)
     val stride =
       if (summary.exportCount == 0) 0
@@ -159,7 +192,7 @@ object S2UassetFormat {
         "FileVersionUE5 ${summary.fileVersionUE5} predates complete property type names," +
           " reading header only"
       )
-      return S2Uasset(summary, stride, names, imports, exports)
+      return S2Uasset(summary, stride, nameTableEnd, names, imports, exports)
     }
 
     for (exp in exports) {
@@ -175,7 +208,7 @@ object S2UassetFormat {
         S2CfgLog.LOG.warn("could not read properties of export ${exp.objectName}: ${it.message}")
       }.getOrNull()
     }
-    return S2Uasset(summary, stride, names, imports, exports)
+    return S2Uasset(summary, stride, nameTableEnd, names, imports, exports)
   }
 
   // ---------------------------------------------------------------- reading
@@ -246,23 +279,34 @@ object S2UassetFormat {
       throw S2UassetException("implausible custom version count $customVersionCount")
     r.skip(customVersionCount * 20) // GUID + version each
 
-    r.i32() // TotalHeaderSize
+    val postNameOffsetFieldsAt = ArrayList<S2OffsetField>()
+    /** Reads an offset field, remembering where it was so the writer can shift it. */
+    fun offset32(): Int {
+      postNameOffsetFieldsAt.add(S2OffsetField(r.pos, 4))
+      return r.i32()
+    }
+
+    // TotalHeaderSize is the end of the header, so it moves with everything the name table pushes.
+    val totalHeaderSize = offset32()
+    val packageNameAt = r.pos
     val packageName = r.fstring()
     val packageFlags = r.u32()
+    val nameCountAt = r.pos
     val nameCount = r.i32()
-    val nameOffset = r.i32()
+    val nameOffsetAt = r.pos
+    val nameOffset = r.i32() // resizing the table does not move its start; not an offset32()
     if (fileVersionUE5 >= UE5_ADD_SOFTOBJECTPATH_LIST) {
       r.i32() // SoftObjectPathsCount
-      r.i32() // SoftObjectPathsOffset
+      offset32() // SoftObjectPathsOffset
     }
-    r.fstring() // LocalizationId
+    val localizationId = r.fstring()
     r.i32() // GatherableTextDataCount
-    r.i32() // GatherableTextDataOffset
+    offset32() // GatherableTextDataOffset
     val exportCount = r.i32()
-    val exportOffset = r.i32()
+    val exportOffset = offset32()
     val importCount = r.i32()
-    val importOffset = r.i32()
-    val dependsOffset = r.i32()
+    val importOffset = offset32()
+    val dependsOffset = offset32()
 
     // The tail is only trustworthy if it lands exactly on the name table; if it does not, we
     // mis-modelled some field and the writer must refuse rather than corrupt the summary. Reading
@@ -278,9 +322,13 @@ object S2UassetFormat {
     return S2UassetSummary(
       legacyFileVersion = legacyFileVersion,
       fileVersionUE5 = fileVersionUE5,
+      totalHeaderSize = totalHeaderSize,
       packageName = packageName,
+      packageNameAt = packageNameAt,
+      localizationId = localizationId,
       nameCount = nameCount,
       nameOffset = nameOffset,
+      nameOffsetAt = nameOffsetAt,
       exportCount = exportCount,
       exportOffset = exportOffset,
       importCount = importCount,
@@ -288,12 +336,21 @@ object S2UassetFormat {
       dependsOffset = dependsOffset,
       bulkDataStartOffsetAt = tail?.bulkDataStartOffsetAt,
       payloadTocOffsetAt = tail?.payloadTocOffsetAt,
+      nameCountAt = nameCountAt,
+      generationNameCountsAt = tail?.generationNameCountsAt ?: emptyList(),
+      namesReferencedFromExportDataCountAt = tail?.namesReferencedFromExportDataCountAt,
+      assetRegistryDataOffsetAt = tail?.assetRegistryDataOffsetAt,
+      postNameOffsetFieldsAt = postNameOffsetFieldsAt + (tail?.offsets ?: emptyList()),
     )
   }
 
   private class SummaryTail(
     val bulkDataStartOffsetAt: Int,
     val payloadTocOffsetAt: Int?,
+    val generationNameCountsAt: List<Int>,
+    val namesReferencedFromExportDataCountAt: Int?,
+    val assetRegistryDataOffsetAt: Int,
+    val offsets: List<S2OffsetField>,
     val end: Int,
   )
 
@@ -304,30 +361,56 @@ object S2UassetFormat {
    * tail, record where they landed.
    */
   private fun readSummaryTail(r: Reader, packageFlags: Long, ue5: Int): SummaryTail {
-    r.skip(4 * 2) // SoftPackageReferencesCount, SoftPackageReferencesOffset
-    r.i32() // SearchableNamesOffset
-    r.i32() // ThumbnailTableOffset
+    val offsets = ArrayList<S2OffsetField>()
+    /** Reads an offset field, remembering where it was so the writer can shift it. */
+    fun offset32(): Int {
+      offsets.add(S2OffsetField(r.pos, 4))
+      return r.i32()
+    }
+    r.i32() // SoftPackageReferencesCount
+    offset32() // SoftPackageReferencesOffset
+    offset32() // SearchableNamesOffset
+    offset32() // ThumbnailTableOffset
     r.skip(16) // Guid
     if (packageFlags and PKG_FILTER_EDITOR_ONLY == 0L) r.skip(16) // PersistentGuid
-    r.skip(count(r) * 8) // Generations: (ExportCount, NameCount) each
+    // Generations: (ExportCount, NameCount) each.
+    val generationNameCountsAt = ArrayList<Int>()
+    repeat(count(r)) {
+      r.i32() // ExportCount
+      generationNameCountsAt.add(r.pos)
+      r.i32() // NameCount
+    }
     readEngineVersion(r) // SavedByEngineVersion
     readEngineVersion(r) // CompatibleWithEngineVersion
     r.u32() // CompressionFlags
     r.skip(count(r) * 16) // CompressedChunks — always empty in modern packages
     r.u32() // PackageSource
     r.skip(count(r) * 4) // AdditionalPackagesToCook — FString array, always empty
-    r.i32() // AssetRegistryDataOffset
+    val assetRegistryDataOffsetAt = r.pos
+    offset32() // AssetRegistryDataOffset
     val bulkDataStartOffsetAt = r.pos
     r.i64() // BulkDataStartOffset
-    r.i32() // WorldTileInfoDataOffset
+    offset32() // WorldTileInfoDataOffset
     r.skip(count(r) * 4) // ChunkIDs
     r.i32() // PreloadDependencyCount
-    r.i32() // PreloadDependencyOffset
-    if (ue5 >= UE5_NAMES_REFERENCED_FROM_EXPORT_DATA) r.i32() // NamesReferencedFromExportDataCount
+    offset32() // PreloadDependencyOffset
+    var namesReferencedFromExportDataCountAt: Int? = null
+    if (ue5 >= UE5_NAMES_REFERENCED_FROM_EXPORT_DATA) {
+      namesReferencedFromExportDataCountAt = r.pos
+      r.i32() // NamesReferencedFromExportDataCount
+    }
     val payloadTocOffsetAt = if (ue5 >= UE5_PAYLOAD_TOC) r.pos else null
     if (payloadTocOffsetAt != null) r.i64() // PayloadTocOffset
-    if (ue5 >= UE5_DATA_RESOURCES) r.i32() // DataResourceOffset
-    return SummaryTail(bulkDataStartOffsetAt, payloadTocOffsetAt, r.pos)
+    if (ue5 >= UE5_DATA_RESOURCES) offset32() // DataResourceOffset
+    return SummaryTail(
+      bulkDataStartOffsetAt = bulkDataStartOffsetAt,
+      payloadTocOffsetAt = payloadTocOffsetAt,
+      generationNameCountsAt = generationNameCountsAt,
+      namesReferencedFromExportDataCountAt = namesReferencedFromExportDataCountAt,
+      assetRegistryDataOffsetAt = assetRegistryDataOffsetAt,
+      offsets = offsets,
+      end = r.pos,
+    )
   }
 
   /** An inline array count, rejected when it is large enough to mean we lost alignment. */
@@ -542,19 +625,123 @@ object S2UassetFormat {
     fun toByteArray(): ByteArray = out.toByteArray()
   }
 
-  /** Resolves an FName to its table index; these assets never need to grow the name table. */
-  private fun nameIndex(names: List<String>, name: String): Int {
+  /**
+   * Resolves an FName to its table index, appending it to [names] if it is not there yet — a
+   * package saved without some language has none of that language's names, so every one the
+   * payload needs has to be added on the first write.
+   */
+  private fun nameIndex(names: MutableList<String>, name: String): Int {
     val i = names.indexOf(name)
-    if (i == -1) throw S2UassetException("\"$name\" is not in the package name table")
-    return i
+    if (i != -1) return i
+    names.add(name)
+    return names.size - 1
   }
 
-  private fun writeName(w: Writer, names: List<String>, name: String) {
+  /** CRC table for `FCrc::Strihash_DEPRECATED`: polynomial 0x04C11DB7, MSB-first. */
+  private val STRIHASH_TABLE = IntArray(256) { i ->
+    var c = i shl 24
+    repeat(8) { c = if (c and 0x8000_0000.toInt() != 0) (c shl 1) xor 0x04C1_1DB7 else c shl 1 }
+    c
+  }
+
+  /** Standard reflected CRC-32 table, as `FCrc::CRCTablesSB8[0]` used by `FCrc::StrCrc32`. */
+  private val CRC32_TABLE = IntArray(256) { i ->
+    var c = i
+    repeat(8) { c = if (c and 1 != 0) (c ushr 1) xor 0xEDB8_8320.toInt() else c ushr 1 }
+    c
+  }
+
+  /**
+   * `FCrc::Strihash_DEPRECATED` — the case-insensitive hash `FNameEntrySerialized` stores first.
+   * One byte per character; every FName in these packages is ASCII, which the writer enforces.
+   */
+  private fun strihash(name: String): Int {
+    var hash = 0
+    for (ch in name.uppercase()) {
+      hash = ((hash ushr 8) and 0x00FF_FFFF) xor STRIHASH_TABLE[(hash xor ch.code) and 0xff]
+    }
+    return hash and 0xffff
+  }
+
+  /** `FCrc::StrCrc32` — the case-preserving hash, four bytes per character. */
+  private fun strCrc32(name: String): Int {
+    var crc = -1
+    for (ch in name) {
+      var v = ch.code
+      repeat(4) {
+        crc = (crc ushr 8) xor CRC32_TABLE[(crc xor v) and 0xff]
+        v = v ushr 8
+      }
+    }
+    return crc.inv() and 0xffff
+  }
+
+  /**
+   * How the editor orders the export-data half of the name table: case-insensitively, with case as
+   * the tiebreak. Only the order has to match — nothing reads the names positionally — but matching
+   * it keeps a rewritten asset byte-identical to one the editor saved.
+   */
+  private val NAME_ORDER = Comparator<String> { a, b ->
+    val byLower = a.lowercase().compareTo(b.lowercase())
+    if (byLower != 0) byLower else a.compareTo(b)
+  }
+
+  /** An `FNameEntrySerialized`: the string, then its non-case-preserving and case-preserving hash. */
+  private fun serializeNameEntries(names: List<String>): ByteArray {
+    val w = Writer()
+    for (name in names) {
+      if (!name.all { it.code in 0..0x7f })
+        throw S2UassetException("cannot hash non-ASCII FName \"$name\"")
+      w.fstring(name)
+      w.raw(
+        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+          .putShort(strihash(name).toShort())
+          .putShort(strCrc32(name).toShort())
+          .array()
+      )
+    }
+    return w.toByteArray()
+  }
+
+  /** FName index positions inside an import record, relative to the record's start. */
+  private val IMPORT_NAME_FIELDS_AT = intArrayOf(0, 8, 20, 28)
+
+  /** …and inside an export record: `ObjectName`. */
+  private const val EXPORT_OBJECT_NAME_AT = 16
+
+  /** `PackageMetaData`'s payload is not tagged properties; its two FName fields sit at these bytes. */
+  private val METADATA_NAME_FIELDS_AT = intArrayOf(1, 21)
+
+  /**
+   * `ScriptSerializationEndOffset`: where the export's tagged-property block ends, relative to the
+   * export's own data. It is `SerialSize - 4` in every asset the Mod Editor has written here, so it
+   * moves with the payload; left stale, the editor stops reading properties mid-entry.
+   */
+  private const val EXPORT_SCRIPT_SERIALIZATION_END_AT = 104
+
+  /**
+   * The names referenced by every export's data *except* the localization payload — i.e. the part
+   * of `NamesReferencedFromExportData` a rewrite has to preserve without knowing what the old
+   * payload used. Only `PackageMetaData` has any in this package shape.
+   */
+  private fun metadataNames(original: ByteArray, parsed: S2Uasset): List<String> {
+    val bb = ByteBuffer.wrap(original).order(ByteOrder.LITTLE_ENDIAN)
+    return parsed.exports
+      .filter { it.className == "MetaData" }
+      .flatMap { exp ->
+        METADATA_NAME_FIELDS_AT.map { at ->
+          parsed.names.getOrNull(bb.getInt(exp.serialOffset.toInt() + at))
+        }
+      }
+      .filterNotNull()
+  }
+
+  private fun writeName(w: Writer, names: MutableList<String>, name: String) {
     w.i32(nameIndex(names, name)).i32(0)
   }
 
   /** `FPropertyTypeName`: an FName followed by its parameter list. */
-  private fun writeTypeName(w: Writer, names: List<String>, type: S2PropertyTypeName) {
+  private fun writeTypeName(w: Writer, names: MutableList<String>, type: S2PropertyTypeName) {
     writeName(w, names, type.name)
     w.i32(type.params.size)
     for (p in type.params) writeTypeName(w, names, p)
@@ -563,7 +750,7 @@ object S2UassetFormat {
   /** A property tag: name, type, value size, then `EPropertyTagFlags` (always 0 for these). */
   private fun writeTag(
     w: Writer,
-    names: List<String>,
+    names: MutableList<String>,
     name: String,
     type: S2PropertyTypeName,
     value: ByteArray,
@@ -581,7 +768,7 @@ object S2UassetFormat {
    * of `{ SID, LanguagesToLocalizedStrings }` structs. Deliberately does not generalise to other
    * asset types: there is no general property writer here.
    */
-  fun serializeLocalizedTexts(names: List<String>, entries: List<S2LocalizedText>): ByteArray {
+  fun serializeLocalizedTexts(names: MutableList<String>, entries: List<S2LocalizedText>): ByteArray {
     val elements = Writer()
     elements.i32(entries.size)
     for (entry in entries) {
@@ -629,54 +816,319 @@ object S2UassetFormat {
     return out.toByteArray()
   }
 
+  /** An `FString` holding an ASCII package name: length prefix, the bytes, a terminator. */
+  private fun fstringBytes(value: String): ByteArray {
+    if (value.any { it.code !in 0x20..0x7e })
+      throw S2UassetException("$value: package names must be ASCII")
+    return Writer().fstring(value).toByteArray()
+  }
+
+  /** Replaces `[at, at + length)` with [bytes]. */
+  private class S2ByteEdit(val at: Int, val length: Int, val bytes: ByteArray)
+
+  /**
+   * Splices non-overlapping [edits] into [original] and hands back the result plus a `shift` that
+   * maps any byte position in the original to where it ended up. Every offset stored in the
+   * package — in the summary, in the export table, inside the asset registry section — is patched
+   * through it, so a rename does not have to know which of its edits sits in front of which offset.
+   */
+  private class S2Spliced(val out: ByteArray, private val sorted: List<S2ByteEdit>) {
+    fun shift(pos: Int): Int =
+      pos + sorted.filter { it.at < pos }.sumOf { it.bytes.size - it.length }
+  }
+
+  private fun applyEdits(original: ByteArray, edits: List<S2ByteEdit>): S2Spliced {
+    val sorted = edits.sortedBy { it.at }
+    val out = java.io.ByteArrayOutputStream()
+    var at = 0
+    for (edit in sorted) {
+      if (edit.at < at) throw S2UassetException("overlapping edit at ${edit.at}")
+      out.write(original, at, edit.at - at)
+      out.write(edit.bytes)
+      at = edit.at + edit.length
+    }
+    out.write(original, at, original.size - at)
+    return S2Spliced(out.toByteArray(), sorted)
+  }
+
+  /** Every position in [haystack] where the ASCII [needle] occurs, searching from [from]. */
+  private fun indicesOf(haystack: ByteArray, needle: String, from: Int): List<Int> {
+    val bytes = needle.toByteArray(Charsets.ISO_8859_1)
+    val found = ArrayList<Int>()
+    var at = from
+    while (at <= haystack.size - bytes.size) {
+      if ((bytes.indices).all { haystack[at + it] == bytes[it] }) found.add(at)
+      at++
+    }
+    return found
+  }
+
+  /**
+   * Returns [original] rewritten under a new [packageName] — i.e. mints a new text asset from an
+   * existing one, which is what repairs a package copied from another mod and renamed on disk.
+   *
+   * [packageName] is the mount path the cooker addresses the asset by: `/<SdkModName>/<AssetName>`
+   * for a package sitting at the root of the SDK mod's `Content/`.
+   *
+   * The identity is in four kinds of places, and the last is why this cannot be a string replace:
+   * the summary's `PackageName` and the asset registry's object-path and asset-name strings are
+   * length-prefixed `FString`s, the name table holds both the full path and the short name as
+   * hashed `FName`s (and its export-data half is sorted, so a rename can reorder it), and
+   * `LocalizationId` namespaces the package's gathered text — two mods must not share one, so it
+   * is re-derived from the new name rather than inherited.
+   *
+   * Ported from S2Mods' `renameLocalizationPackage`.
+   */
+  fun renameLocalizationPackage(original: ByteArray, packageName: String): ByteArray {
+    val parsed = parse(original)
+    val summary = parsed.summary
+    if (summary.bulkDataStartOffsetAt == null)
+      throw S2UassetException("this package's summary did not decode to a layout we can write back")
+    if (summary.packageName == packageName) return original
+    val registryAt = summary.assetRegistryDataOffsetAt
+      ?: throw S2UassetException("this package has no asset registry section to rename")
+
+    val src = ByteBuffer.wrap(original).order(ByteOrder.LITTLE_ENDIAN)
+    fun shortOf(name: String) = name.substring(name.lastIndexOf('/') + 1)
+    val spellings = listOf(
+      summary.packageName to packageName,
+      shortOf(summary.packageName) to shortOf(packageName),
+    )
+    fun rename(name: String) = spellings.firstOrNull { it.first == name }?.second ?: name
+
+    // The name table: substitute, then re-sort the export-data half the way the editor keeps it.
+    val nrefAt = summary.namesReferencedFromExportDataCountAt
+    val oldRef = if (nrefAt == null) parsed.names.size else src.getInt(nrefAt)
+    val names = parsed.names.take(oldRef).map(::rename).sortedWith(NAME_ORDER) +
+      parsed.names.drop(oldRef).map(::rename)
+    if (names.toSet().size != names.size)
+      throw S2UassetException("renaming to $packageName collides with a name already in the table")
+    val remap = parsed.names.withIndex().associate { (i, n) -> i to names.indexOf(rename(n)) }
+
+    val edits = ArrayList<S2ByteEdit>()
+    edits.add(
+      S2ByteEdit(
+        summary.packageNameAt,
+        fstringBytes(summary.packageName).size,
+        fstringBytes(packageName),
+      )
+    )
+    edits.add(
+      S2ByteEdit(
+        summary.nameOffset,
+        parsed.nameTableEnd - summary.nameOffset,
+        serializeNameEntries(names),
+      )
+    )
+
+    // The localization id, in the summary and again in PackageMetaData's
+    // PackageLocalizationNamespace. Same length, so this shifts nothing.
+    val localizationId = java.security.MessageDigest.getInstance("MD5")
+      .digest(packageName.toByteArray(Charsets.UTF_8))
+      .joinToString("") { "%02X".format(it) }
+    if (localizationId.length != summary.localizationId.length)
+      throw S2UassetException("unexpected localization id ${summary.localizationId}")
+    for (at in indicesOf(original, summary.localizationId, 0)) {
+      edits.add(
+        S2ByteEdit(at, localizationId.length, localizationId.toByteArray(Charsets.ISO_8859_1))
+      )
+    }
+
+    // The asset registry section spells the asset out again, as plain FStrings. They sit between
+    // the depends table and the end of the header; anything matching a spelling *and* carrying the
+    // right length prefix is one of them.
+    for ((from, to) in spellings) {
+      for (at in indicesOf(original, "$from\u0000", summary.dependsOffset)) {
+        if (at >= summary.totalHeaderSize) continue
+        if (src.getInt(at - 4) != from.length + 1) continue
+        edits.add(S2ByteEdit(at - 4, from.length + 5, fstringBytes(to)))
+      }
+    }
+
+    val spliced = applyEdits(original, edits.sortedBy { it.at })
+    val out = ByteBuffer.wrap(spliced.out).order(ByteOrder.LITTLE_ENDIAN)
+
+    /** Patches a stored file offset: both the field's own position and its value have moved. */
+    fun shiftStoredOffset(at: Int, bytes: Int) {
+      val to = spliced.shift(at)
+      val value = if (bytes == 4) out.getInt(to).toLong() else out.getLong(to)
+      // Absent tables store 0 or INDEX_NONE; shifting one would invent an offset.
+      if (value <= 0) return
+      if (bytes == 4) out.putInt(to, spliced.shift(value.toInt()))
+      else out.putLong(to, spliced.shift(value.toInt()).toLong())
+    }
+
+    shiftStoredOffset(summary.nameOffsetAt, 4)
+    for (field in summary.postNameOffsetFieldsAt) shiftStoredOffset(field.at, field.bytes)
+    for (at in listOfNotNull(summary.bulkDataStartOffsetAt, summary.payloadTocOffsetAt))
+      shiftStoredOffset(at, 8)
+    for (i in parsed.exports.indices)
+      shiftStoredOffset(summary.exportOffset + i * parsed.exportStride + EXPORT_SERIAL_OFFSET_AT, 8)
+    // The asset registry section opens with a file offset to its dependency data, and the four
+    // bytes in front of the section are one too.
+    val sectionAt = src.getInt(registryAt)
+    if (sectionAt > 0) {
+      shiftStoredOffset(sectionAt - 4, 4)
+      shiftStoredOffset(sectionAt, 8)
+    }
+
+    // Every FName index outside the name table points into the old ordering.
+    fun remapAt(at: Int) {
+      val to = spliced.shift(at)
+      val index = remap[out.getInt(to)]
+      if (index == null || index < 0) throw S2UassetException("name index at $at is out of range")
+      out.putInt(to, index)
+    }
+    val importStride =
+      if (summary.importCount > 0) (summary.exportOffset - summary.importOffset) / summary.importCount
+      else 0
+    for (i in 0 until summary.importCount)
+      for (at in IMPORT_NAME_FIELDS_AT) remapAt(summary.importOffset + i * importStride + at)
+    for (i in parsed.exports.indices)
+      remapAt(summary.exportOffset + i * parsed.exportStride + EXPORT_OBJECT_NAME_AT)
+    for (exp in parsed.exports) {
+      if (exp.className != "MetaData") continue
+      for (field in METADATA_NAME_FIELDS_AT) remapAt(exp.serialOffset.toInt() + field)
+    }
+    return out.array()
+  }
+
   /**
    * Returns [original] with its [LOCALIZATION_CLASS] export replaced by [entries].
    *
-   * That one export is re-serialised and spliced back in, patching the handful of offsets that
-   * move as a result; everything else in the package is copied through untouched.
+   * The export is re-serialised, the name table rebuilt around whatever FNames the new payload
+   * needs, and every stored offset behind the table shifted to match. Rebuilding the table rather
+   * than inheriting it is what lets a language the package was never saved with be added — and,
+   * in the other direction, makes a rewrite with fewer entries *shrink* the header instead of
+   * leaving the old payload's names behind as orphans.
+   *
+   * Ported from S2Mods' `writeLocalizedTexts`; the byte-exact fixture tests are the contract.
    */
   fun withLocalizedTexts(original: ByteArray, entries: List<S2LocalizedText>): ByteArray {
     val parsed = parse(original)
+    val summary = parsed.summary
     val index = parsed.exports.indexOfFirst { it.className == LOCALIZATION_CLASS }
     if (index == -1) throw S2UassetException("no $LOCALIZATION_CLASS export in this package")
     val target = parsed.exports[index]
-    val bulkDataStartOffsetAt = parsed.summary.bulkDataStartOffsetAt
+    val bulkDataStartOffsetAt = summary.bulkDataStartOffsetAt
       // Without that position a save would leave the summary pointing into the middle of the
       // export data. Refuse: a package that cannot be written beats a broken one.
       ?: throw S2UassetException(
         "this package's summary did not decode to a layout this plugin can write back"
       )
+    if (parsed.exportStride < EXPORT_SCRIPT_SERIALIZATION_END_AT + 4)
+      throw S2UassetException("export entry stride ${parsed.exportStride} is too small to write")
 
-    val payload = serializeLocalizedTexts(parsed.names, entries)
-    val delta = payload.size - target.serialSize
+    val src = ByteBuffer.wrap(original).order(ByteOrder.LITTLE_ENDIAN)
+
+    // The editor lays the name table out in two parts: the names the export data references,
+    // sorted, then the rest (package name, import and export object names) in load order.
+    // `NamesReferencedFromExportDataCount` is the length of that first part, so a writer cannot
+    // just append new names at the end — the count would have to cover the header names too, and
+    // the editor errors on the mismatch. Rebuild both parts instead and remap every index that
+    // pointed into the old table.
+    val nrefAt = summary.namesReferencedFromExportDataCountAt
+    val oldRef = if (nrefAt == null) parsed.names.size else src.getInt(nrefAt)
+    // What the payload alone references: serialising against an empty table collects exactly that.
+    val payloadNames = ArrayList<String>()
+    serializeLocalizedTexts(payloadNames, entries)
+    // The other exports' export data references names too (`MetaData` uses two) and those have to
+    // stay. Take exactly those rather than the whole old prefix: keeping the prefix would carry
+    // every name the *previous* entries used into the new table, so rewriting an asset with fewer
+    // texts would leave orphans behind and the bytes would depend on what the file held before.
+    val head = (metadataNames(original, parsed) + payloadNames).distinct().sortedWith(NAME_ORDER)
+    val headSet = head.toHashSet()
+    // A name can move from the tail into the prefix — `/Script/ModKitEditor` does, once export
+    // data names it — and must not then appear twice.
+    val names = ArrayList(head + parsed.names.drop(oldRef).filter { it !in headSet })
+    val sizeBefore = names.size
+    val payload = serializeLocalizedTexts(names, entries)
+    if (names.size != sizeBefore) throw S2UassetException("name table grew while writing")
+
+    val newTable = serializeNameEntries(names)
+    val nameDelta = newTable.size - (parsed.nameTableEnd - summary.nameOffset)
+    val remap = parsed.names.withIndex().associate { (i, name) -> i to names.indexOf(name) }
+    val delta = payload.size - target.serialSize.toInt()
+
+    val targetEnd = (target.serialOffset + target.serialSize).toInt()
     val out = ByteBuffer
-      .allocate(original.size + delta.toInt())
+      .allocate(original.size + nameDelta + delta)
       .order(ByteOrder.LITTLE_ENDIAN)
-      .put(original, 0, target.serialOffset.toInt())
+      .put(original, 0, summary.nameOffset)
+      .put(newTable)
+      .put(original, parsed.nameTableEnd, target.serialOffset.toInt() - parsed.nameTableEnd)
       .put(payload)
-      .put(
-        original,
-        (target.serialOffset + target.serialSize).toInt(),
-        original.size - (target.serialOffset + target.serialSize).toInt(),
-      )
+      .put(original, targetEnd, original.size - targetEnd)
 
-    // Everything after this export shifts by `delta`: the later exports' payloads, plus the two
-    // summary offsets that point past the export data.
-    out.putLong(
-      parsed.summary.exportOffset + index * parsed.exportStride + EXPORT_SERIAL_SIZE_AT,
-      payload.size.toLong(),
-    )
-    for (i in index + 1 until parsed.exports.size) {
-      out.putLong(
-        parsed.summary.exportOffset + i * parsed.exportStride + EXPORT_SERIAL_OFFSET_AT,
-        parsed.exports[i].serialOffset + delta,
-      )
+    out.putInt(summary.nameCountAt, names.size)
+    for (at in summary.generationNameCountsAt) out.putInt(at, names.size)
+    if (nrefAt != null) out.putInt(nrefAt, head.size)
+
+    // Everything behind the name table shifts by `nameDelta`, and everything behind the rewritten
+    // export by `delta` as well: the later exports' payloads, plus the two summary offsets that
+    // point past the export data. Every other offset lives in the summary, which we walked to find.
+    for (field in summary.postNameOffsetFieldsAt) {
+      val value = if (field.bytes == 4) out.getInt(field.at).toLong() else out.getLong(field.at)
+      // Absent tables use 0 or INDEX_NONE; shifting a sentinel would turn it into an offset.
+      if (value <= 0) continue
+      if (field.bytes == 4) out.putInt(field.at, (value + nameDelta).toInt())
+      else out.putLong(field.at, value + nameDelta)
     }
+
+    fun exportField(i: Int, at: Int) =
+      summary.exportOffset + nameDelta + i * parsed.exportStride + at
+
+    out.putLong(exportField(index, EXPORT_SERIAL_SIZE_AT), payload.size.toLong())
+    val scriptEndAt = exportField(index, EXPORT_SCRIPT_SERIALIZATION_END_AT)
+    out.putInt(scriptEndAt, out.getInt(scriptEndAt) + delta)
+    for (i in parsed.exports.indices) {
+      val shift = nameDelta + (if (i > index) delta else 0)
+      out.putLong(exportField(i, EXPORT_SERIAL_OFFSET_AT), parsed.exports[i].serialOffset + shift)
+    }
+
+    // Every FName index outside the payload we just rebuilt points into the old table, so move
+    // them all onto the new one. These are the only places this package shape stores one.
+    fun remapAt(at: Int) {
+      val to = remap[out.getInt(at)]
+      if (to == null || to < 0) throw S2UassetException("name index at $at is out of range")
+      out.putInt(at, to)
+    }
+    val importStride =
+      if (summary.importCount > 0) (summary.exportOffset - summary.importOffset) / summary.importCount
+      else 0
+    for (i in 0 until summary.importCount)
+      for (at in IMPORT_NAME_FIELDS_AT)
+        remapAt(summary.importOffset + nameDelta + i * importStride + at)
+    for (i in parsed.exports.indices) remapAt(exportField(i, EXPORT_OBJECT_NAME_AT))
+    for (i in parsed.exports.indices) {
+      if (i == index || parsed.exports[i].className != "MetaData") continue
+      val at = parsed.exports[i].serialOffset.toInt() + nameDelta + (if (i > index) delta else 0)
+      for (field in METADATA_NAME_FIELDS_AT) remapAt(at + field)
+    }
+
+    // The asset registry section is not just a blob: its first field is an `int64` file offset to
+    // the package's dependency data, which sits at the end of the same section. It moves with the
+    // name table like every other header offset, and leaving it stale makes the UE editor seek
+    // into the name table and read garbage counts ("SerializeAssetRegistryDependencyData").
+    val registryAt = summary.assetRegistryDataOffsetAt
+    if (registryAt != null) {
+      val sectionAt = out.getInt(registryAt)
+      if (sectionAt > 0) {
+        // The four bytes in front of the section are a file offset too (`DependsOffset + 12` in
+        // every asset the editor has written here), and nothing in the summary points at them.
+        val before = out.getInt(sectionAt - 4)
+        if (before > 0 && before < summary.totalHeaderSize)
+          out.putInt(sectionAt - 4, before + nameDelta)
+        val dependencyDataOffset = out.getLong(sectionAt)
+        if (dependencyDataOffset > 0) out.putLong(sectionAt, dependencyDataOffset + nameDelta)
+      }
+    }
+
     // `payloadTocOffsetAt` is null in packages predating `PayloadTocOffset`.
-    for (at in listOfNotNull(bulkDataStartOffsetAt, parsed.summary.payloadTocOffsetAt)) {
+    for (at in listOfNotNull(bulkDataStartOffsetAt, summary.payloadTocOffsetAt)) {
       // Both fields use INDEX_NONE when absent; shifting a sentinel would turn it into an offset.
       val value = out.getLong(at)
-      if (value > 0) out.putLong(at, value + delta)
+      if (value > 0) out.putLong(at, value + nameDelta + delta)
     }
     return out.array()
   }

@@ -32,10 +32,14 @@ Install it from the IDE with Settings | Plugins | Marketplace, and search for "S
   line of dialogue
 - Recognised by the package header, not the file name
 - Copy JSON / Paste JSON in the editor toolbar, in the same shape the S2Mods
-  `localization-uasset.mts` dump prints, so a document moves between the two tools
+  `src/localization/uasset.mts` dump prints, so a document moves between the two tools
+- Any language can be added, including one the package was never saved with: the package's name
+  table is rebuilt around whatever the document needs, and every header offset behind it patched
+- A package whose own name does not match where it sits in the SDK is called out in a banner, with
+  a one-click fix — an asset copied from another mod keeps that mod's name, and its strings never
+  load. Set the SDK `Content` directory under Settings | Tools | STALKER 2 Cfg to turn this on
 - A document that is not valid JSON, or not a localization document, is not saved: the banner under
-  the editor says why. A language the package's name table does not hold is refused too, since the
-  writer cannot add one
+  the editor says why
 
 **Writing**
 - Completion for enum literals, narrowed to the ones the corpus actually assigns to that key

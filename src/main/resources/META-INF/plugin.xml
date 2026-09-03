@@ -61,6 +61,11 @@
               fieldName="INSTANCE" extensions="uasset"/>
     <fileEditorProvider implementation="com.sdwvit.s2cfg.S2LocalizationEditorProvider"/>
 
+    <!-- stage 6: settings, and the package-name check they enable -->
+    <applicationService serviceImplementation="com.sdwvit.s2cfg.S2CfgSettings"/>
+    <applicationConfigurable parentId="tools" instance="com.sdwvit.s2cfg.S2CfgConfigurable"
+                             id="com.sdwvit.s2cfg.settings" displayName="STALKER 2 Cfg"/>
+
     <!-- stage 4: repo-aware extras -->
     <gotoRelatedProvider implementation="com.sdwvit.s2cfg.S2CfgRelatedProvider"/>
     <lang.documentationProvider language="S2Cfg"
